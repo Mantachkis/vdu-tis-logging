@@ -27,7 +27,10 @@ class AuditLogServiceProvider extends ServiceProvider
     {
         $this->mergeConfigFrom(__DIR__.'/../../config/audit.php', 'audit');
 
-        // EventLogger klasė bus pridėta 2 etape.
-        // $this->app->singleton(\Vdu\TisLogging\EventLogger::class);
+        $this->app->singleton(\Vdu\TisLogging\EventLogger::class, function () {
+            return new \Vdu\TisLogging\EventLogger();
+        });
+
+        $this->app->alias(\Vdu\TisLogging\EventLogger::class, 'audit-log');
     }
 }

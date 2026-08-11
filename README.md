@@ -16,7 +16,7 @@ vartotojo/įrenginio identifikavimo duomenys, įvykio aprašymas.
 Šis paketas kuriamas etapais:
 
 - [x] 1 etapas – paketo repo ir bazinės struktūros paruošimas
-- [ ] 2 etapas – EventLogger branduolys (Monolog + PSR-3)
+- [x] 2 etapas – EventLogger branduolys (Monolog + PSR-3)
 - [ ] 3 etapas – integraciniai hook'ai (auth, model, view)
 - [ ] 4 etapas – diegimo automatizavimas (`audit:install` komanda)
 - [ ] 5 etapas – versijavimas ir platinimo kanalas
@@ -71,7 +71,49 @@ vartotojo home katalogą (pvz. `/home/studentas`), o NE bendrą `/home/logs` kat
 kad kiekvienas projektas rašytų į savo atskirą, izoliuotą vietą, o ne į bendrą, visiems
 administratoriams matomą žurnalų katalogą.
 
-### Teisių paruošimas serveryje (vienkartinis veiksmas prieš pirmą diegimą)
+## Naudojimas
+
+Paketas prieinamas per `AuditLog` fasadą (auto-registruotas), be reikalo importuoti klasę:
+
+```php
+use AuditLog;
+
+// Bendras metodas su explicit event_type
+AuditLog::log('security', 'login', 'Vartotojas prisijungė', [
+    'user_id' => $user->id,
+    'user_identifier' => $user->email,
+]);
+
+// Patogesni trumpiniai - identiškas rezultatas
+AuditLog::info('view', 'Peržiūrėtas sąskaitos įrašas', [
+    'subject_type' => \App\Models\Invoice::class,
+    'subject_id' => $invoice->id,
+]);
+
+AuditLog::security('login', 'Vartotojas prisijungė');
+AuditLog::system('cron', 'Paleistas naktinis eksportas');
+AuditLog::warning('login_blocked', 'Bandymas prisijungti prie nepatvirtintos paskyros');
+AuditLog::error('exception', 'Nepagauta klaida apdorojant mokėjimą');
+```
+
+Kiekvienas įrašas automatiškai papildomas: tikslia data/laiku (ISO 8601), IP adresu ir
+User-Agent iš esamo request'o, bei prisijungusio vartotojo ID/el. paštu (jei `user_id`/
+`user_identifier` nenurodyti rankomis `$data` masyve).
+
+**`info`, `security`, `system`** → `audit.log`
+**`warning`, `error`** → `error.log`
+
+### Testų paleidimas
+
+```bash
+composer install
+vendor/bin/phpunit
+```
+
+Testai naudoja laikiną katalogą (`sys_get_temp_dir()`), tad NIEKADA neliečia realaus
+serverio `/home/logs` kelio.
+
+
 
 Kadangi `/home/logs` yra už kiekvieno projekto vartotojo home katalogo ribų, reikia bendros
 Linux grupės su rašymo teise:
