@@ -18,5 +18,14 @@ class TestCase extends BaseTestCase
         // į realų serverio /home/logs kelią.
         $app['config']->set('audit.base_path', sys_get_temp_dir().'/vdu-tis-logging-tests');
         $app['config']->set('audit.app_name', 'testapp');
+
+        // SQLite in-memory DB - Auditable/Observer testams reikia realios
+        // Eloquent modelio schemos, bet ne realios projekto DB.
+        $app['config']->set('database.default', 'testbench');
+        $app['config']->set('database.connections.testbench', [
+            'driver' => 'sqlite',
+            'database' => ':memory:',
+            'prefix' => '',
+        ]);
     }
 }

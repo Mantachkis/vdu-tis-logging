@@ -46,6 +46,19 @@ return [
 
     /*
     |--------------------------------------------------------------------
+    | Numatytieji neloginami (jautrūs) laukai
+    |--------------------------------------------------------------------
+    |
+    | Šie laukai VISADA pašalinami iš old_values/new_values Auditable
+    | trait naudojant modeliuose, nepriklausomai nuo to, ar modelis
+    | juos eksplicitiškai išskiria per auditExclude(). Kiekvienas
+    | modelis gali pridėti papildomų laukų per savo auditExclude().
+    |
+    */
+    'exclude' => ['password', 'remember_token'],
+
+    /*
+    |--------------------------------------------------------------------
     | Saugojimo terminas dienomis
     |--------------------------------------------------------------------
     |

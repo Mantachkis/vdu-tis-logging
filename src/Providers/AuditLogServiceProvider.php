@@ -2,13 +2,19 @@
 
 namespace Vdu\TisLogging\Providers;
 
+use Illuminate\Auth\Events\Failed;
+use Illuminate\Auth\Events\Login;
+use Illuminate\Auth\Events\Logout;
+use Illuminate\Support\Facades\Event;
 use Illuminate\Support\ServiceProvider;
+use Vdu\TisLogging\Listeners\LogFailedLogin;
+use Vdu\TisLogging\Listeners\LogLogout;
+use Vdu\TisLogging\Listeners\LogSuccessfulLogin;
 
 class AuditLogServiceProvider extends ServiceProvider
 {
     /**
-     * Bootstrapping: config publish, migracijų kelias, event listener'iai
-     * (listener'iai bus pridėti 3 etape).
+     * Bootstrapping: config publish, migracijų kelias, auth event listener'iai.
      */
     public function boot()
     {
@@ -17,6 +23,10 @@ class AuditLogServiceProvider extends ServiceProvider
         ], 'audit-config');
 
         $this->loadMigrationsFrom(__DIR__.'/../../database/migrations');
+
+        Event::listen(Login::class, LogSuccessfulLogin::class);
+        Event::listen(Logout::class, LogLogout::class);
+        Event::listen(Failed::class, LogFailedLogin::class);
     }
 
     /**

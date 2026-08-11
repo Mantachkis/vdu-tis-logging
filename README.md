@@ -17,7 +17,7 @@ vartotojo/įrenginio identifikavimo duomenys, įvykio aprašymas.
 
 - [x] 1 etapas – paketo repo ir bazinės struktūros paruošimas
 - [x] 2 etapas – EventLogger branduolys (Monolog + PSR-3)
-- [ ] 3 etapas – integraciniai hook'ai (auth, model, view)
+- [x] 3 etapas – integraciniai hook'ai (auth, model, view)
 - [ ] 4 etapas – diegimo automatizavimas (`audit:install` komanda)
 - [ ] 5 etapas – versijavimas ir platinimo kanalas
 - [ ] 6 etapas – pilotinis diegimas
@@ -26,8 +26,16 @@ vartotojo/įrenginio identifikavimo duomenys, įvykio aprašymas.
 
 ## Reikalavimai
 
-- PHP ^7.1.3
-- Laravel ~5.7.0
+- PHP ^7.1.3 arba ^8.0
+- Laravel (illuminate/*) ^5.7 - ^9.0
+
+### Suderinamumo matrica
+
+| PHP | Laravel | Monolog | Statusas |
+|---|---|---|---|
+| 7.1 - 7.4 | 5.7 - 5.8 | 1.23+ | ✅ Naudojama esamuose VDU TIS projektuose |
+| 7.3 - 8.0 | 6.x - 9.x | 1.23+ arba 2.x | ✅ Palaikoma per platesnius composer.json apribojimus |
+| 8.1+ | 10.x+ | 3.x | ⚠️ Nebandyta - Monolog 3.x turi lūžtančių (breaking) pakeitimų. Prieš diegiant tokiame projekte, paleisti pilną testų rinkinį (`vendor/bin/phpunit`) ir patikrinti rezultatus.
 
 ## Diegimas (kai paketas bus paruoštas naudoti)
 
@@ -110,8 +118,61 @@ composer install
 vendor/bin/phpunit
 ```
 
-Testai naudoja laikiną katalogą (`sys_get_temp_dir()`), tad NIEKADA neliečia realaus
-serverio `/home/logs` kelio.
+Testai naudoja laikiną katalogą (`sys_get_temp_dir()`) ir SQLite in-memory DB, tad NIEKADA
+neliečia realaus serverio `/home/logs` kelio ar projekto duomenų bazės.
+
+## Auth įvykiai (prisijungimas/atsijungimas/nepavykę bandymai)
+
+Registruojasi AUTOMATIŠKAI vos padarius `composer require` - jokios papildomos
+konfigūracijos nereikia standartiniam Laravel `Auth::attempt()` naudojimui.
+
+Pagauna: `Illuminate\Auth\Events\Login`, `Logout`, `Failed`.
+
+**Svarbus apribojimas:** jei projekto login kontroleris apeina `Auth::attempt()`
+(pvz. rankiniu `Auth::guard('x')->login($user)` kvietimu arba SSO broker'io
+integracija), atitinkami Laravel event'ai NEBUS sukviesti automatiškai. Tokiu
+atveju reikia rankinio `AuditLog::security(...)` kvietimo tose šakose - žr.
+projekto login kontrolerio analizę (jei tokia buvo pateikta atskirai).
+
+## Modelio pokyčiai - `Auditable` trait
+
+```php
+use Vdu\TisLogging\Traits\Auditable;
+
+class Invoice extends Model
+{
+    use Auditable;
+
+    // Neprivaloma: papildomi laukai, kurių šis modelis neturi audituoti
+    // (be globalaus config('audit.exclude') sąrašo, kuris pagal nutylėjimą
+    // pašalina "password" ir "remember_token").
+    public function auditExclude(): array
+    {
+        return ['internal_notes'];
+    }
+}
+```
+
+Create/update/delete veiksmai loginami automatiškai, su senomis ir naujomis reikšmėmis.
+
+## Peržiūra - `LogsViews` trait
+
+Eloquent neturi "peržiūrėjimo" įvykio, tad šis kvietimas visada bus rankinis:
+
+```php
+use Vdu\TisLogging\Traits\LogsViews;
+
+class InvoiceController extends Controller
+{
+    use LogsViews;
+
+    public function show(Invoice $invoice)
+    {
+        $this->logView($invoice);
+        return view('invoices.show', compact('invoice'));
+    }
+}
+```
 
 
 
