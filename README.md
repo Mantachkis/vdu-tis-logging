@@ -1,4 +1,4 @@
-# vdu/audit-log
+# vdu/tis-logging
 
 Bendra veiksmų žurnalizavimo (audit log) sistema visiems įmonės Laravel projektams.
 
@@ -32,7 +32,7 @@ vartotojo/įrenginio identifikavimo duomenys, įvykio aprašymas.
 ## Diegimas (kai paketas bus paruoštas naudoti)
 
 ```bash
-composer require vdu/audit-log
+composer require vdu/tis-logging
 php artisan vendor:publish --tag=audit-config
 ```
 

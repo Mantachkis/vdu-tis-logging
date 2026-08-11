@@ -1,6 +1,6 @@
 <?php
 
-namespace Vdu\AuditLog\Providers;
+namespace Vdu\TisLogging\Providers;
 
 use Illuminate\Support\ServiceProvider;
 
@@ -28,6 +28,6 @@ class AuditLogServiceProvider extends ServiceProvider
         $this->mergeConfigFrom(__DIR__.'/../../config/audit.php', 'audit');
 
         // EventLogger klasė bus pridėta 2 etape.
-        // $this->app->singleton(\Vdu\AuditLog\EventLogger::class);
+        // $this->app->singleton(\Vdu\TisLogging\EventLogger::class);
     }
 }

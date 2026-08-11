@@ -1,6 +1,6 @@
 {
-    "name": "vdu/audit-log",
-    "description": "Bendra veiksmų žurnalizavimo (audit log) sistema Laravel projektams: prisijungimai, peržiūros, pakeitimai, sisteminiai ir saugumo įvykiai.",
+    "name": "vdu/tis-logging",
+    "description": "VDU TIS bendra veiksmų žurnalizavimo (audit log) sistema Laravel projektams: prisijungimai, peržiūros, pakeitimai, sisteminiai ir saugumo įvykiai.",
     "type": "library",
     "license": "proprietary",
     "keywords": ["laravel", "audit", "logging", "security"],
@@ -17,21 +17,21 @@
     },
     "autoload": {
         "psr-4": {
-            "Vdu\\AuditLog\\": "src/"
+            "Vdu\\TisLogging\\": "src/"
         }
     },
     "autoload-dev": {
         "psr-4": {
-            "Vdu\\AuditLog\\Tests\\": "tests/"
+            "Vdu\\TisLogging\\Tests\\": "tests/"
         }
     },
     "extra": {
         "laravel": {
             "providers": [
-                "Vdu\\AuditLog\\Providers\\AuditLogServiceProvider"
+                "Vdu\\TisLogging\\Providers\\AuditLogServiceProvider"
             ],
             "aliases": {
-                "AuditLog": "Vdu\\AuditLog\\Facades\\AuditLog"
+                "AuditLog": "Vdu\\TisLogging\\Facades\\AuditLog"
             }
         }
     },

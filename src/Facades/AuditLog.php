@@ -1,6 +1,6 @@
 <?php
 
-namespace Vdu\AuditLog\Facades;
+namespace Vdu\TisLogging\Facades;
 
 use Illuminate\Support\Facades\Facade;
 
