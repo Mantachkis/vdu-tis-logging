@@ -48,7 +48,7 @@ class EventLoggerTest extends TestCase
 
         $this->assertStringContainsString('Vartotojas prisijungė', $auditContent);
         $this->assertStringContainsString('jonas@vdu.lt', $auditContent);
-        $this->assertFileDoesNotExist($this->logDir.'/error.log');
+        $this->assertFileNotExists($this->logDir.'/error.log');
     }
 
     /** @test */
