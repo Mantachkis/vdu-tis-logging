@@ -19,7 +19,8 @@ vartotojo/įrenginio identifikavimo duomenys, įvykio aprašymas.
 - [x] 2 etapas – EventLogger branduolys (Monolog + PSR-3)
 - [x] 3 etapas – integraciniai hook'ai (auth, model, view)
 - [x] 4 etapas – diegimo automatizavimas (`audit:install` komanda)
-- [ ] 5 etapas – versijavimas ir platinimo kanalas
+- [x] 5 etapas – versijavimas ir platinimo kanalas
+- [ ] 6 etapas – pilotinis diegimas
 - [ ] 5 etapas – versijavimas ir platinimo kanalas
 - [ ] 6 etapas – pilotinis diegimas
 - [ ] 7 etapas – diegimas į visus projektus
@@ -38,12 +39,62 @@ vartotojo/įrenginio identifikavimo duomenys, įvykio aprašymas.
 | 7.3 - 8.0 | 6.x - 9.x | 1.23+ arba 2.x | ✅ Palaikoma per platesnius composer.json apribojimus |
 | 8.1+ | 10.x+ | 3.x | ⚠️ Nebandyta - Monolog 3.x turi lūžtančių (breaking) pakeitimų. Prieš diegiant tokiame projekte, paleisti pilną testų rinkinį (`vendor/bin/phpunit`) ir patikrinti rezultatus.
 
-## Diegimas naujame projekte
+## Diegimas realiame projekte
+
+Repo yra **privatus**, tad kiekvienas serveris/deploy vartotojas, kuris darys
+`composer require`, pirmiausia turi vieną kartą autentifikuotis prie GitHub.
+
+### 1. Vienkartinė autentifikacija serveryje (kiekvienam deploy vartotojui)
+
+Sukurkite GitHub Personal Access Token: GitHub → Settings → Developer settings →
+Personal access tokens → Generate new token (classic), scope: **repo** (pilna prieiga
+prie privačių repo). Nukopijuokite token'ą (parodomas tik vieną kartą).
+
+Serveryje, tuo pačiu Linux vartotoju, kuriuo bus vykdomas `composer require`:
+
+```bash
+composer config --global github-oauth.github.com <jūsų-token'as>
+```
+
+Tai išsaugo token'ą į `~/.composer/auth.json` **to konkretaus vartotojo** namuose -
+reikia atlikti kiekvienam Linux vartotojui/serveriui, kuris deploy'ins projektus,
+naudojančius šį paketą (žr. anksčiau aptartą `/home/studentas`, `/home/sso` ir t.t.
+struktūrą - kiekvienam iš jų atskirai, jei jie deploy'ina skirtingus projektus).
+
+### 2. Kiekvieno projekto `composer.json`
+
+```json
+{
+    "repositories": [
+        { "type": "vcs", "url": "https://github.com/Mantachkis/vdu-tis-logging.git" }
+    ],
+    "require": {
+        "vdu/tis-logging": "^1.0"
+    }
+}
+```
+
+### 3. Diegimas
 
 ```bash
 composer require vdu/tis-logging
 php artisan audit:install
 ```
+
+## Versijavimas
+
+Naudojamas [Semantic Versioning](https://semver.org/): `MAJOR.MINOR.PATCH`.
+
+- **PATCH** (`1.0.x`) - bug fix'ai, be API pakeitimų. Saugu automatiškai atsinaujinti.
+- **MINOR** (`1.x.0`) - nauji, atgal suderinami funkcionalumai (pvz. naujas trait'as).
+- **MAJOR** (`x.0.0`) - lūžtantys (breaking) pakeitimai, pvz. metodo signatūros
+  pasikeitimas ar minimalios PHP/Laravel versijos pakėlimas.
+
+Projektuose `composer.json` naudokite `^1.0` - tai leidžia automatinius patch/minor
+naujinimus (`composer update vdu/tis-logging`), bet NE major versijos pasikeitimus,
+kurie reikalautų peržiūrėti `CHANGELOG.md` prieš atnaujinant.
+
+Visos versijos ir jų pakeitimai fiksuojami [`CHANGELOG.md`](CHANGELOG.md) faile.
 
 `audit:install` komanda automatiškai:
 1. publikuoja `config/audit.php`;
