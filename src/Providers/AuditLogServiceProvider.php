@@ -7,6 +7,7 @@ use Illuminate\Auth\Events\Login;
 use Illuminate\Auth\Events\Logout;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\ServiceProvider;
+use Vdu\TisLogging\Console\InstallCommand;
 use Vdu\TisLogging\Listeners\LogFailedLogin;
 use Vdu\TisLogging\Listeners\LogLogout;
 use Vdu\TisLogging\Listeners\LogSuccessfulLogin;
@@ -14,7 +15,8 @@ use Vdu\TisLogging\Listeners\LogSuccessfulLogin;
 class AuditLogServiceProvider extends ServiceProvider
 {
     /**
-     * Bootstrapping: config publish, migracijų kelias, auth event listener'iai.
+     * Bootstrapping: config publish, migracijų kelias, auth event listener'iai,
+     * Artisan komandos.
      */
     public function boot()
     {
@@ -27,6 +29,12 @@ class AuditLogServiceProvider extends ServiceProvider
         Event::listen(Login::class, LogSuccessfulLogin::class);
         Event::listen(Logout::class, LogLogout::class);
         Event::listen(Failed::class, LogFailedLogin::class);
+
+        if ($this->app->runningInConsole()) {
+            $this->commands([
+                InstallCommand::class,
+            ]);
+        }
     }
 
     /**

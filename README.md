@@ -18,7 +18,8 @@ vartotojo/įrenginio identifikavimo duomenys, įvykio aprašymas.
 - [x] 1 etapas – paketo repo ir bazinės struktūros paruošimas
 - [x] 2 etapas – EventLogger branduolys (Monolog + PSR-3)
 - [x] 3 etapas – integraciniai hook'ai (auth, model, view)
-- [ ] 4 etapas – diegimo automatizavimas (`audit:install` komanda)
+- [x] 4 etapas – diegimo automatizavimas (`audit:install` komanda)
+- [ ] 5 etapas – versijavimas ir platinimo kanalas
 - [ ] 5 etapas – versijavimas ir platinimo kanalas
 - [ ] 6 etapas – pilotinis diegimas
 - [ ] 7 etapas – diegimas į visus projektus
@@ -37,12 +38,20 @@ vartotojo/įrenginio identifikavimo duomenys, įvykio aprašymas.
 | 7.3 - 8.0 | 6.x - 9.x | 1.23+ arba 2.x | ✅ Palaikoma per platesnius composer.json apribojimus |
 | 8.1+ | 10.x+ | 3.x | ⚠️ Nebandyta - Monolog 3.x turi lūžtančių (breaking) pakeitimų. Prieš diegiant tokiame projekte, paleisti pilną testų rinkinį (`vendor/bin/phpunit`) ir patikrinti rezultatus.
 
-## Diegimas (kai paketas bus paruoštas naudoti)
+## Diegimas naujame projekte
 
 ```bash
 composer require vdu/tis-logging
-php artisan vendor:publish --tag=audit-config
+php artisan audit:install
 ```
+
+`audit:install` komanda automatiškai:
+1. publikuoja `config/audit.php`;
+2. patikrina/papildo `.env` failą trūkstamais `AUDIT_LOG_*` kintamaisiais (numatytosios reikšmės);
+3. sukuria žurnalų katalogą (`{AUDIT_LOG_BASE_PATH}/{AUDIT_LOG_APP_NAME}`) ir patikrina, ar jis rašomas.
+
+**Po komandos VISADA patikrinkite** `.env` faile pridėtas `AUDIT_LOG_APP_NAME` ir
+`AUDIT_LOG_BASE_PATH` reikšmes - numatytosios gali netikti konkrečiam projektui/serveriui.
 
 Konfigūracija: `config/audit.php` arba `.env` kintamieji:
 
