@@ -25,16 +25,16 @@ class InstallCommand extends Command
     public function handle()
     {
         $this->info('VDU TIS Audit Log - diegimas');
-        $this->newLine();
+        $this->line('');
 
         $this->publishConfig();
-        $this->newLine();
+        $this->line('');
 
         $this->ensureEnvVariables();
-        $this->newLine();
+        $this->line('');
 
         $this->ensureLogDirectory();
-        $this->newLine();
+        $this->line('');
 
         $this->printNextSteps();
 
@@ -122,11 +122,11 @@ class InstallCommand extends Command
         $this->info('Diegimas baigtas. Kiti žingsniai:');
         $this->line('  1. Modeliuose, kuriuos norite audituoti (create/update/delete):');
         $this->line('     use Vdu\TisLogging\Traits\Auditable;');
-        $this->newLine();
+        $this->line('');
         $this->line('  2. Kontroleriuose, kur reikia fiksuoti peržiūrą:');
         $this->line('     use Vdu\TisLogging\Traits\LogsViews;');
         $this->line('     $this->logView($model); // metodo viduje');
-        $this->newLine();
+        $this->line('');
         $this->line('  3. Prisijungimas/atsijungimas per standartinį Auth::attempt() jau veikia automatiškai.');
         $this->line('     Jei projektas naudoja custom auth (SSO/rankinis guard->login()), reikės');
         $this->line('     rankinio AuditLog::security(...) kvietimo tose vietose - žr. README.');
