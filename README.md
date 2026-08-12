@@ -41,27 +41,7 @@ vartotojo/įrenginio identifikavimo duomenys, įvykio aprašymas.
 
 ## Diegimas realiame projekte
 
-Repo yra **privatus**, tad kiekvienas serveris/deploy vartotojas, kuris darys
-`composer require`, pirmiausia turi vieną kartą autentifikuotis prie GitHub.
-
-### 1. Vienkartinė autentifikacija serveryje (kiekvienam deploy vartotojui)
-
-Sukurkite GitHub Personal Access Token: GitHub → Settings → Developer settings →
-Personal access tokens → Generate new token (classic), scope: **repo** (pilna prieiga
-prie privačių repo). Nukopijuokite token'ą (parodomas tik vieną kartą).
-
-Serveryje, tuo pačiu Linux vartotoju, kuriuo bus vykdomas `composer require`:
-
-```bash
-composer config --global github-oauth.github.com <jūsų-token'as>
-```
-
-Tai išsaugo token'ą į `~/.composer/auth.json` **to konkretaus vartotojo** namuose -
-reikia atlikti kiekvienam Linux vartotojui/serveriui, kuris deploy'ins projektus,
-naudojančius šį paketą (žr. anksčiau aptartą `/home/studentas`, `/home/sso` ir t.t.
-struktūrą - kiekvienam iš jų atskirai, jei jie deploy'ina skirtingus projektus).
-
-### 2. Kiekvieno projekto `composer.json`
+Kiekvieno projekto `composer.json`:
 
 ```json
 {
@@ -74,7 +54,7 @@ struktūrą - kiekvienam iš jų atskirai, jei jie deploy'ina skirtingus projekt
 }
 ```
 
-### 3. Diegimas
+Diegimas:
 
 ```bash
 composer require vdu/tis-logging
