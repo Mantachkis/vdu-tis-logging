@@ -7,14 +7,9 @@ use Vdu\TisLogging\Tests\Fixtures\TestPost;
 
 class AuditableTest extends TestCase
 {
-    protected $logDir;
-
     protected function setUp(): void
     {
         parent::setUp();
-
-        $this->logDir = sys_get_temp_dir().'/vdu-tis-logging-tests/testapp';
-        $this->cleanUpLogDir();
 
         Schema::create('test_posts', function ($table) {
             $table->increments('id');
@@ -27,16 +22,22 @@ class AuditableTest extends TestCase
     protected function tearDown(): void
     {
         Schema::dropIfExists('test_posts');
-        $this->cleanUpLogDir();
         parent::tearDown();
     }
 
-    protected function cleanUpLogDir(): void
+    /**
+     * Grąžina paskutinės žurnalo eilutės (JSON) turinį, dekoduotą į masyvą.
+     *
+     * Naudojame paskutinę eilutę, o ne visą failą, kad galėtume atskirti
+     * kelis to pačio testo veiksmus (pvz. create+update) tarp savęs.
+     */
+    protected function lastLogEntry(string $filename): array
     {
-        if (is_dir($this->logDir)) {
-            array_map('unlink', glob($this->logDir.'/*'));
-            @rmdir($this->logDir);
-        }
+        $lines = array_values(array_filter(
+            explode("\n", trim(file_get_contents($this->logDir().'/'.$filename)))
+        ));
+
+        return json_decode(end($lines), true);
     }
 
     /** @test */
@@ -44,8 +45,7 @@ class AuditableTest extends TestCase
     {
         TestPost::create(['title' => 'Pirmas įrašas', 'password' => 'slaptas']);
 
-        $content = file_get_contents($this->logDir.'/audit.log');
-        $decoded = json_decode(trim($content), true);
+        $decoded = $this->lastLogEntry('audit.log');
 
         $this->assertSame('create', $decoded['context']['category']);
         $this->assertSame('Pirmas įrašas', $decoded['context']['new_values']['title']);
@@ -57,14 +57,10 @@ class AuditableTest extends TestCase
     public function updating_a_model_logs_old_and_new_values()
     {
         $post = TestPost::create(['title' => 'Senas pavadinimas']);
-
-        // Pirmas įrašas faile yra "create" - nusivalome, kad testuotume tik update.
-        $this->cleanUpLogDir();
-
         $post->update(['title' => 'Naujas pavadinimas']);
 
-        $content = file_get_contents($this->logDir.'/audit.log');
-        $decoded = json_decode(trim($content), true);
+        // Paskutinė eilutė faile - tai "update" įrašas (create buvo prieš tai).
+        $decoded = $this->lastLogEntry('audit.log');
 
         $this->assertSame('update', $decoded['context']['category']);
         $this->assertSame('Senas pavadinimas', $decoded['context']['old_values']['title']);
@@ -75,12 +71,9 @@ class AuditableTest extends TestCase
     public function deleting_a_model_logs_the_old_values()
     {
         $post = TestPost::create(['title' => 'Bus ištrintas']);
-        $this->cleanUpLogDir();
-
         $post->delete();
 
-        $content = file_get_contents($this->logDir.'/audit.log');
-        $decoded = json_decode(trim($content), true);
+        $decoded = $this->lastLogEntry('audit.log');
 
         $this->assertSame('delete', $decoded['context']['category']);
         $this->assertSame('Bus ištrintas', $decoded['context']['old_values']['title']);

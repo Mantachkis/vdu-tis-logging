@@ -119,7 +119,10 @@ vendor/bin/phpunit
 ```
 
 Testai naudoja laikiną katalogą (`sys_get_temp_dir()`) ir SQLite in-memory DB, tad NIEKADA
-neliečia realaus serverio `/home/logs` kelio ar projekto duomenų bazės.
+neliečia realaus serverio `/home/logs` kelio ar projekto duomenų bazės. Kiekvienas testo
+metodas naudoja unikalų poaplankį (išvengti Windows failų rankenų konfliktų), tad laikini
+failai kaupiasi `%TEMP%/vdu-tis-logging-tests/` - juos galima retkarčiais rankomis išvalyti,
+tai nekritinis dalykas (OS temp katalogas periodiškai švarinamas pats).
 
 ## Auth įvykiai (prisijungimas/atsijungimas/nepavykę bandymai)
 

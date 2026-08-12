@@ -10,29 +10,6 @@ use Illuminate\Support\Facades\Event;
 
 class AuthListenersTest extends TestCase
 {
-    protected $logDir;
-
-    protected function setUp(): void
-    {
-        parent::setUp();
-        $this->logDir = sys_get_temp_dir().'/vdu-tis-logging-tests/testapp';
-        $this->cleanUpLogDir();
-    }
-
-    protected function tearDown(): void
-    {
-        $this->cleanUpLogDir();
-        parent::tearDown();
-    }
-
-    protected function cleanUpLogDir(): void
-    {
-        if (is_dir($this->logDir)) {
-            array_map('unlink', glob($this->logDir.'/*'));
-            @rmdir($this->logDir);
-        }
-    }
-
     protected function fakeUser(int $id, string $email): Authenticatable
     {
         return new class ($id, $email) implements Authenticatable {
@@ -61,7 +38,7 @@ class AuthListenersTest extends TestCase
 
         Event::dispatch(new Login('web', $user, false));
 
-        $content = file_get_contents($this->logDir.'/audit.log');
+        $content = file_get_contents($this->logDir().'/audit.log');
         $decoded = json_decode(trim($content), true);
 
         $this->assertSame('login', $decoded['context']['category']);
@@ -76,7 +53,7 @@ class AuthListenersTest extends TestCase
 
         Event::dispatch(new Logout('web', $user));
 
-        $content = file_get_contents($this->logDir.'/audit.log');
+        $content = file_get_contents($this->logDir().'/audit.log');
         $decoded = json_decode(trim($content), true);
 
         $this->assertSame('logout', $decoded['context']['category']);
@@ -87,7 +64,7 @@ class AuthListenersTest extends TestCase
     {
         Event::dispatch(new Failed('web', null, ['username' => 'jonas', 'password' => 'slaptas']));
 
-        $content = file_get_contents($this->logDir.'/audit.log');
+        $content = file_get_contents($this->logDir().'/audit.log');
         $decoded = json_decode(trim($content), true);
 
         $this->assertSame('login_failed', $decoded['context']['category']);
