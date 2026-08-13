@@ -42,4 +42,27 @@ class TestCase extends BaseTestCase
     {
         return rtrim(config('audit.base_path'), '/').'/'.config('audit.app_name');
     }
+
+    /**
+     * Suranda šiandienos datuotą audit/error žurnalo failą (RotatingFileHandler
+     * failo pavadinime automatiškai prideda datą, pvz. audit-2026-08-13.log,
+     * tad tikslaus pavadinimo iš anksto nežinome - ieškome per glob()).
+     */
+    protected function findLogFile(string $channel): ?string
+    {
+        $files = glob($this->logDir().'/'.$channel.'/*.log');
+
+        return $files[0] ?? null;
+    }
+
+    protected function lastLogEntry(string $channel): array
+    {
+        $file = $this->findLogFile($channel);
+
+        $this->assertNotNull($file, "Nerastas {$channel} žurnalo failas kataloge ".$this->logDir()."/{$channel}");
+
+        $lines = array_values(array_filter(explode("\n", trim(file_get_contents($file)))));
+
+        return json_decode(end($lines), true);
+    }
 }

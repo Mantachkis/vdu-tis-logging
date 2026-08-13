@@ -57,7 +57,7 @@ class InstallCommandTest extends TestCase
     }
 
     /** @test */
-    public function it_creates_the_log_directory()
+    public function it_creates_audit_and_error_log_directories()
     {
         $this->artisan('audit:install')->assertExitCode(0);
 
@@ -68,6 +68,7 @@ class InstallCommandTest extends TestCase
         // NEDARANT poveikio realiam serveriui vykdant testus.
         $dir = rtrim(config('audit.base_path'), '/').'/'.config('audit.app_name');
 
-        $this->assertDirectoryExists($dir);
+        $this->assertDirectoryExists($dir.'/audit');
+        $this->assertDirectoryExists($dir.'/error');
     }
 }

@@ -32,14 +32,13 @@ class AuthListenersTest extends TestCase
     }
 
     /** @test */
-    public function successful_login_is_logged_to_audit_log()
+    public function successful_login_is_logged_to_audit_channel()
     {
         $user = $this->fakeUser(7, 'jonas@vdu.lt');
 
         Event::dispatch(new Login('web', $user, false));
 
-        $content = file_get_contents($this->logDir().'/audit.log');
-        $decoded = json_decode(trim($content), true);
+        $decoded = $this->lastLogEntry('audit');
 
         $this->assertSame('login', $decoded['context']['category']);
         $this->assertSame('jonas@vdu.lt', $decoded['context']['user_identifier']);
@@ -47,14 +46,13 @@ class AuthListenersTest extends TestCase
     }
 
     /** @test */
-    public function logout_is_logged_to_audit_log()
+    public function logout_is_logged_to_audit_channel()
     {
         $user = $this->fakeUser(7, 'jonas@vdu.lt');
 
         Event::dispatch(new Logout('web', $user));
 
-        $content = file_get_contents($this->logDir().'/audit.log');
-        $decoded = json_decode(trim($content), true);
+        $decoded = $this->lastLogEntry('audit');
 
         $this->assertSame('logout', $decoded['context']['category']);
     }
@@ -64,11 +62,11 @@ class AuthListenersTest extends TestCase
     {
         Event::dispatch(new Failed('web', null, ['username' => 'jonas', 'password' => 'slaptas']));
 
-        $content = file_get_contents($this->logDir().'/audit.log');
-        $decoded = json_decode(trim($content), true);
+        $decoded = $this->lastLogEntry('audit');
+        $rawContent = file_get_contents($this->findLogFile('audit'));
 
         $this->assertSame('login_failed', $decoded['context']['category']);
         $this->assertSame('jonas', $decoded['context']['user_identifier']);
-        $this->assertStringNotContainsString('slaptas', $content);
+        $this->assertStringNotContainsString('slaptas', $rawContent);
     }
 }

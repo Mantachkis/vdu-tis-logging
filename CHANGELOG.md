@@ -3,6 +3,21 @@
 Visi svarbūs paketo pakeitimai fiksuojami šiame faile.
 Versijavimas pagal [Semantic Versioning](https://semver.org/): MAJOR.MINOR.PATCH.
 
+## [1.1.0] - 2026-08-13
+
+### Pakeista
+- Žurnalų saugojimo struktūra: vietoj vieno nuolat augančio `audit.log`/`error.log`
+  failo, dabar naudojami atskiri poaplankiai `{app_name}/audit/` ir `{app_name}/error/`
+  su automatine kasdienine rotacija (Monolog `RotatingFileHandler`) - pvz.
+  `audit/audit-2026-08-13.log`. Senesni nei `AUDIT_LOG_RETENTION_DAYS` dienų failai
+  automatiškai ištrinami.
+- `audit:install` komanda dabar sukuria abu poaplankius (`audit/`, `error/`) su
+  atskiru teisių patikrinimu kiekvienam.
+
+**Diegiantiems iš v1.0.0:** jei jau turite senų `audit.log`/`error.log` failų iš
+ankstesnės versijos, jie liks kaip yra (paketas jų automatiškai nemigruoja) - naujus
+įrašus rasite naujoje `audit/`/`error/` poaplankių struktūroje.
+
 ## [1.0.0] - 2026-08-12
 
 Pirmas stabilus, pilnai testuotas paketo leidimas, paruoštas pilotiniam diegimui.

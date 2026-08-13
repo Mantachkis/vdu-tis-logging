@@ -7,53 +7,66 @@ use Vdu\TisLogging\EventLogger;
 class EventLoggerTest extends TestCase
 {
     /** @test */
-    public function it_creates_the_log_directory_automatically()
+    public function it_creates_audit_and_error_subdirectories_automatically()
     {
         $this->app->make(EventLogger::class);
 
-        $this->assertDirectoryExists($this->logDir());
+        $this->assertDirectoryExists($this->logDir().'/audit');
+        $this->assertDirectoryExists($this->logDir().'/error');
     }
 
     /** @test */
-    public function info_events_go_to_audit_log()
+    public function info_events_go_to_audit_channel()
     {
         $logger = $this->app->make(EventLogger::class);
 
         $logger->info('login', 'Vartotojas prisijungė', ['user_id' => 1, 'user_identifier' => 'jonas@vdu.lt']);
 
-        $auditContent = file_get_contents($this->logDir().'/audit.log');
+        $decoded = $this->lastLogEntry('audit');
 
-        $this->assertStringContainsString('Vartotojas prisijungė', $auditContent);
-        $this->assertStringContainsString('jonas@vdu.lt', $auditContent);
-        $this->assertFileNotExists($this->logDir().'/error.log');
+        $this->assertSame('Vartotojas prisijungė', $decoded['message']);
+        $this->assertSame('jonas@vdu.lt', $decoded['context']['user_identifier']);
+        $this->assertNull($this->findLogFile('error'));
     }
 
     /** @test */
-    public function security_and_system_events_go_to_audit_log()
+    public function security_and_system_events_go_to_audit_channel()
     {
         $logger = $this->app->make(EventLogger::class);
 
         $logger->security('login', 'Saugumo įvykis');
+        $decoded = $this->lastLogEntry('audit');
+        $this->assertSame('Saugumo įvykis', $decoded['message']);
+
         $logger->system('cron', 'Sisteminis įvykis');
-
-        $auditContent = file_get_contents($this->logDir().'/audit.log');
-
-        $this->assertStringContainsString('Saugumo įvykis', $auditContent);
-        $this->assertStringContainsString('Sisteminis įvykis', $auditContent);
+        $decoded = $this->lastLogEntry('audit');
+        $this->assertSame('Sisteminis įvykis', $decoded['message']);
     }
 
     /** @test */
-    public function warning_and_error_events_go_to_error_log()
+    public function warning_and_error_events_go_to_error_channel()
     {
         $logger = $this->app->make(EventLogger::class);
 
         $logger->warning('login_blocked', 'Bandymas prisijungti prie nepatvirtintos paskyros');
+        $decoded = $this->lastLogEntry('error');
+        $this->assertSame('Bandymas prisijungti prie nepatvirtintos paskyros', $decoded['message']);
+
         $logger->error('exception', 'Nepagauta klaida');
+        $decoded = $this->lastLogEntry('error');
+        $this->assertSame('Nepagauta klaida', $decoded['message']);
+    }
 
-        $errorContent = file_get_contents($this->logDir().'/error.log');
+    /** @test */
+    public function log_filename_contains_todays_date()
+    {
+        $logger = $this->app->make(EventLogger::class);
+        $logger->info('view', 'Testinis įrašas');
 
-        $this->assertStringContainsString('Bandymas prisijungti prie nepatvirtintos paskyros', $errorContent);
-        $this->assertStringContainsString('Nepagauta klaida', $errorContent);
+        $file = $this->findLogFile('audit');
+        $today = now()->format('Y-m-d');
+
+        $this->assertStringContainsString($today, basename($file));
     }
 
     /** @test */
@@ -66,8 +79,7 @@ class EventLoggerTest extends TestCase
             'subject_id' => 42,
         ]);
 
-        $line = trim(file_get_contents($this->logDir().'/audit.log'));
-        $decoded = json_decode($line, true);
+        $decoded = $this->lastLogEntry('audit');
 
         $this->assertNotNull($decoded, 'Žurnalo eilutė turi būti validus JSON');
         $this->assertSame('view', $decoded['context']['category']);

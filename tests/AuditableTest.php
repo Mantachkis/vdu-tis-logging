@@ -25,27 +25,12 @@ class AuditableTest extends TestCase
         parent::tearDown();
     }
 
-    /**
-     * Grąžina paskutinės žurnalo eilutės (JSON) turinį, dekoduotą į masyvą.
-     *
-     * Naudojame paskutinę eilutę, o ne visą failą, kad galėtume atskirti
-     * kelis to pačio testo veiksmus (pvz. create+update) tarp savęs.
-     */
-    protected function lastLogEntry(string $filename): array
-    {
-        $lines = array_values(array_filter(
-            explode("\n", trim(file_get_contents($this->logDir().'/'.$filename)))
-        ));
-
-        return json_decode(end($lines), true);
-    }
-
     /** @test */
     public function creating_a_model_logs_the_new_values()
     {
         TestPost::create(['title' => 'Pirmas įrašas', 'password' => 'slaptas']);
 
-        $decoded = $this->lastLogEntry('audit.log');
+        $decoded = $this->lastLogEntry('audit');
 
         $this->assertSame('create', $decoded['context']['category']);
         $this->assertSame('Pirmas įrašas', $decoded['context']['new_values']['title']);
@@ -60,7 +45,7 @@ class AuditableTest extends TestCase
         $post->update(['title' => 'Naujas pavadinimas']);
 
         // Paskutinė eilutė faile - tai "update" įrašas (create buvo prieš tai).
-        $decoded = $this->lastLogEntry('audit.log');
+        $decoded = $this->lastLogEntry('audit');
 
         $this->assertSame('update', $decoded['context']['category']);
         $this->assertSame('Senas pavadinimas', $decoded['context']['old_values']['title']);
@@ -73,7 +58,7 @@ class AuditableTest extends TestCase
         $post = TestPost::create(['title' => 'Bus ištrintas']);
         $post->delete();
 
-        $decoded = $this->lastLogEntry('audit.log');
+        $decoded = $this->lastLogEntry('audit');
 
         $this->assertSame('delete', $decoded['context']['category']);
         $this->assertSame('Bus ištrintas', $decoded['context']['old_values']['title']);

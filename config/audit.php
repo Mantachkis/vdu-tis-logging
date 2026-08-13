@@ -8,7 +8,8 @@ return [
     |--------------------------------------------------------------------
     |
     | Naudojamas kaip poaplankio pavadinimas šakniniame žurnalų kataloge,
-    | pvz. "project-a" -> ~/logs/project-a/audit.log ir ~/logs/project-a/error.log
+    | pvz. "makademijatest" -> ~/logs/makademijatest/audit/... ir
+    | ~/logs/makademijatest/error/...
     |
     */
     'app_name' => env('AUDIT_LOG_APP_NAME', env('APP_NAME', 'app')),
@@ -31,14 +32,17 @@ return [
 
     /*
     |--------------------------------------------------------------------
-    | Audit ir error failų pavadinimai
+    | Audit ir error kanalų bazinis failo pavadinimas
     |--------------------------------------------------------------------
     |
-    | Įvykiai skirstomi į du atskirus failus pagal event_type:
-    | - "error" ir "warning" tipo įvykiai -> error_filename
-    | - "info", "security", "system" -> audit_filename
+    | Įvykiai skirstomi į du atskirus poaplankius pagal event_type:
+    | - "error" ir "warning" tipo įvykiai -> {app_name}/error/
+    | - "info", "security", "system" -> {app_name}/audit/
     |
-    | Galutinis kelias: {base_path}/{app_name}/{*_filename}
+    | Naudojamas Monolog RotatingFileHandler - kiekvienai dienai
+    | automatiškai sukuriamas atskiras failas su data pavadinime, pvz.:
+    | {base_path}/{app_name}/audit/audit-2026-08-13.log
+    | {base_path}/{app_name}/error/error-2026-08-13.log
     |
     */
     'audit_filename' => env('AUDIT_LOG_AUDIT_FILENAME', 'audit.log'),
@@ -62,8 +66,10 @@ return [
     | Saugojimo terminas dienomis
     |--------------------------------------------------------------------
     |
-    | 0 = niekada automatiškai netrinti (rotaciją/archyvavimą tvarko OS
-    | lygmens logrotate arba atskira BDAR retencijos politika).
+    | Tiesiogiai naudojamas Monolog RotatingFileHandler maxFiles parametrui -
+    | automatiškai ištrina audit/error failus, senesnius už nurodytą dienų
+    | skaičių. 0 = niekada automatiškai netrinti (rankinis archyvavimas arba
+    | OS lygmens logrotate turi tvarkyti retenciją patys).
     |
     */
     'retention_days' => env('AUDIT_LOG_RETENTION_DAYS', 90),

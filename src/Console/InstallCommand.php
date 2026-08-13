@@ -87,7 +87,7 @@ class InstallCommand extends Command
 
     protected function ensureLogDirectory(): void
     {
-        $this->info('3. Tikrinu žurnalų katalogą...');
+        $this->info('3. Tikrinu žurnalų katalogus (audit/, error/)...');
 
         // Skaitome tiesiai iš .env (per env() helper'į), nes config() galėjo
         // būti užkrautas PRIEŠ šio komandos vykdymo metu pridėtus .env pakeitimus.
@@ -99,21 +99,25 @@ class InstallCommand extends Command
             return;
         }
 
-        $dir = rtrim($basePath, '/').'/'.$appName;
+        $baseDir = rtrim($basePath, '/').'/'.$appName;
 
-        if (is_dir($dir)) {
-            $this->line("   Katalogas jau egzistuoja: {$dir}");
-        } elseif (@mkdir($dir, 0775, true)) {
-            $this->line("   Sukurtas katalogas: {$dir}");
-        } else {
-            $this->error("   Nepavyko sukurti katalogo: {$dir}");
-            $this->warn('   Tikriausiai trūksta teisių. Administratorius turi paruošti katalogą rankomis - žr. README "Teisių paruošimas serveryje".');
-            return;
-        }
+        foreach (['audit', 'error'] as $subdir) {
+            $dir = $baseDir.'/'.$subdir;
 
-        if (!is_writable($dir)) {
-            $this->error("   ĮSPĖJIMAS: katalogas {$dir} NĖRA rašomas šiam PHP procesui.");
-            $this->warn('   Patikrinkite Linux failų teises/grupes (žr. README "Teisių paruošimas serveryje").');
+            if (is_dir($dir)) {
+                $this->line("   Katalogas jau egzistuoja: {$dir}");
+            } elseif (@mkdir($dir, 0775, true)) {
+                $this->line("   Sukurtas katalogas: {$dir}");
+            } else {
+                $this->error("   Nepavyko sukurti katalogo: {$dir}");
+                $this->warn('   Tikriausiai trūksta teisių. Administratorius turi paruošti katalogą rankomis - žr. README "Teisių paruošimas serveryje".');
+                continue;
+            }
+
+            if (!is_writable($dir)) {
+                $this->error("   ĮSPĖJIMAS: katalogas {$dir} NĖRA rašomas šiam PHP procesui.");
+                $this->warn('   Patikrinkite Linux failų teises/grupes (žr. README "Teisių paruošimas serveryje").');
+            }
         }
     }
 

@@ -5,7 +5,7 @@ namespace Vdu\TisLogging;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Request;
 use Monolog\Logger;
-use Monolog\Handler\StreamHandler;
+use Monolog\Handler\RotatingFileHandler;
 use Monolog\Formatter\JsonFormatter;
 
 /**
@@ -15,9 +15,13 @@ use Monolog\Formatter\JsonFormatter;
  * pats žurnalizavimo mechanizmas atitinka PSR-3 standartą, net jei
  * ši klasė turi savo, domeno prasme aiškesnį API (log/info/security/...).
  *
- * Įvykiai automatiškai skirstomi į du atskirus failus:
- * - audit.log  <- info, security, system
- * - error.log  <- warning, error
+ * Įvykiai automatiškai skirstomi į du atskirus poaplankius/kanalus:
+ * - {app}/audit/audit-YYYY-MM-DD.log  <- info, security, system
+ * - {app}/error/error-YYYY-MM-DD.log  <- warning, error
+ *
+ * Naudojamas Monolog RotatingFileHandler - kiekvienai dienai automatiškai
+ * sukuriamas naujas failas, o senesni nei config('audit.retention_days')
+ * dienų failai automatiškai ištrinami (0 = niekada netrinti automatiškai).
  */
 class EventLogger
 {
@@ -28,7 +32,7 @@ class EventLogger
     const TYPE_ERROR = 'error';
 
     /**
-     * Įvykio tipai, kurie nukeliauja į error.log.
+     * Įvykio tipai, kurie nukeliauja į error kanalą.
      */
     const ERROR_CHANNEL_TYPES = [self::TYPE_WARNING, self::TYPE_ERROR];
 
@@ -44,16 +48,20 @@ class EventLogger
         $basePath = rtrim((string) config('audit.base_path', ''), '/');
         $dir = $basePath.'/'.$appName;
 
-        $this->ensureDirectoryExists($dir);
+        $auditDir = $dir.'/audit';
+        $errorDir = $dir.'/error';
 
-        $this->auditLogger = $this->makeLogger(
+        $this->ensureDirectoryExists($auditDir);
+        $this->ensureDirectoryExists($errorDir);
+
+        $this->auditLogger = $this->makeRotatingLogger(
             'audit',
-            $dir.'/'.config('audit.audit_filename', 'audit.log')
+            $auditDir.'/'.config('audit.audit_filename', 'audit.log')
         );
 
-        $this->errorLogger = $this->makeLogger(
+        $this->errorLogger = $this->makeRotatingLogger(
             'error',
-            $dir.'/'.config('audit.error_filename', 'error.log')
+            $errorDir.'/'.config('audit.error_filename', 'error.log')
         );
     }
 
@@ -152,11 +160,14 @@ class EventLogger
         }
     }
 
-    protected function makeLogger(string $channel, string $path): Logger
+    protected function makeRotatingLogger(string $channel, string $path): Logger
     {
-        // bubble=true, filePermission=0664 (naujam failui), useLocking=true
-        // (flock() apsauga nuo vienalaikio rašymo iš kelių PHP-FPM worker'ių).
-        $handler = new StreamHandler($path, Logger::DEBUG, true, 0664, true);
+        $retentionDays = (int) config('audit.retention_days', 90);
+
+        // maxFiles=$retentionDays (0 = niekada netrinti automatiškai),
+        // bubble=true, filePermission=0664, useLocking=true (flock() apsauga
+        // nuo vienalaikio rašymo iš kelių PHP-FPM worker'ių).
+        $handler = new RotatingFileHandler($path, $retentionDays, Logger::DEBUG, true, 0664, true);
         $handler->setFormatter(new JsonFormatter());
 
         $logger = new Logger($channel);

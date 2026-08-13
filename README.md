@@ -105,13 +105,20 @@ Rezultatas serveryje:
 ├── sso/
 ├── andrius/
 └── logs/                   ← ŽURNALAI, tame pačiame lygyje kaip studentas/sso/andrius
-    ├── adresas1/
-    │   ├── audit.log       ← info, security, system įvykiai
-    │   └── error.log       ← error IR warning tipo įvykiai
+    ├── makademijatest/
+    │   ├── audit/
+    │   │   ├── audit-2026-08-13.log   ← info, security, system įvykiai
+    │   │   └── audit-2026-08-12.log
+    │   └── error/
+    │       ├── error-2026-08-13.log   ← error IR warning tipo įvykiai
+    │       └── error-2026-08-12.log
     ├── adresas2/
-    │   ├── audit.log
-    │   └── error.log
+    │   ├── audit/
+    │   └── error/
 ```
+
+Kiekvienai dienai automatiškai sukuriamas naujas failas (Monolog `RotatingFileHandler`),
+o senesni nei `AUDIT_LOG_RETENTION_DAYS` dienų failai automatiškai ištrinami.
 
 **Svarbu:** `AUDIT_LOG_BASE_PATH` VISADA reikia nurodyti eksplicitiškai kiekviename projekto `.env`
 faile. Automatinis `getenv('HOME')` fallback (jei kintamasis nenurodytas) grąžintų projekto
@@ -148,8 +155,8 @@ Kiekvienas įrašas automatiškai papildomas: tikslia data/laiku (ISO 8601), IP 
 User-Agent iš esamo request'o, bei prisijungusio vartotojo ID/el. paštu (jei `user_id`/
 `user_identifier` nenurodyti rankomis `$data` masyve).
 
-**`info`, `security`, `system`** → `audit.log`
-**`warning`, `error`** → `error.log`
+**`info`, `security`, `system`** → `{app_name}/audit/audit-YYYY-MM-DD.log`
+**`warning`, `error`** → `{app_name}/error/error-YYYY-MM-DD.log`
 
 ### Testų paleidimas
 
@@ -218,6 +225,8 @@ class InvoiceController extends Controller
 ```
 
 
+
+### Teisių paruošimas serveryje (vienkartinis veiksmas prieš pirmą diegimą)
 
 Kadangi `/home/logs` yra už kiekvieno projekto vartotojo home katalogo ribų, reikia bendros
 Linux grupės su rašymo teise:
