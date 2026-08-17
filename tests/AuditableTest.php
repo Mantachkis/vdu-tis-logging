@@ -15,6 +15,7 @@ class AuditableTest extends TestCase
             $table->increments('id');
             $table->string('title');
             $table->string('password')->nullable();
+            $table->string('pass')->nullable();
             $table->timestamps();
         });
     }
@@ -50,6 +51,34 @@ class AuditableTest extends TestCase
         $this->assertSame('update', $decoded['context']['category']);
         $this->assertSame('Senas pavadinimas', $decoded['context']['old_values']['title']);
         $this->assertSame('Naujas pavadinimas', $decoded['context']['new_values']['title']);
+    }
+
+    /** @test */
+    public function old_values_only_contains_changed_fields_not_the_whole_record()
+    {
+        // Duomenų minimizavimo testas (BDAR 5.1.c) - old_values neturi
+        // atskleisti nepakeistų laukų (pvz. id, timestamps, kitų stulpelių).
+        $post = TestPost::create(['title' => 'Pradinis pavadinimas']);
+        $post->update(['title' => 'Pakeistas pavadinimas']);
+
+        $decoded = $this->lastLogEntry('audit');
+
+        $this->assertSame(['title'], array_keys($decoded['context']['old_values']));
+        $this->assertArrayNotHasKey('id', $decoded['context']['old_values']);
+        $this->assertArrayNotHasKey('created_at', $decoded['context']['old_values']);
+        $this->assertArrayNotHasKey('updated_at', $decoded['context']['old_values']);
+    }
+
+    /** @test */
+    public function pass_field_variant_is_excluded_by_default()
+    {
+        // Kai kurie projektai/lentelės naudoja "pass" vietoj "password" -
+        // patikriname, kad exclude sąrašas apima ir šį variantą.
+        TestPost::create(['title' => 'Su pass lauku', 'pass' => 'slaptazodis']);
+
+        $decoded = $this->lastLogEntry('audit');
+
+        $this->assertArrayNotHasKey('pass', $decoded['context']['new_values']);
     }
 
     /** @test */

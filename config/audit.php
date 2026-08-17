@@ -58,8 +58,19 @@ return [
     | juos eksplicitiškai išskiria per auditExclude(). Kiekvienas
     | modelis gali pridėti papildomų laukų per savo auditExclude().
     |
+    | Sąrašas apima dažniausius slaptažodžio lauko pavadinimų variantus,
+    | nes skirtingi projektai/lentelės naudoja skirtingas konvencijas
+    | (pvz. "pass" vietoj "password"). VIS TIEK PATIKRINKITE kiekvieno
+    | audituojamo modelio laukus rankomis prieš diegdami - šis sąrašas
+    | yra saugus numatytasis startas, ne garantija, kad visi jautrūs
+    | laukai (asmens kodai, gimimo datos ir pan.) bus automatiškai
+    | aptikti. Naudokite auditExclude() modelyje papildomiems laukams.
+    |
     */
-    'exclude' => ['password', 'remember_token'],
+    'exclude' => [
+        'password', 'pass', 'passwd', 'pwd',
+        'remember_token', 'api_token',
+    ],
 
     /*
     |--------------------------------------------------------------------

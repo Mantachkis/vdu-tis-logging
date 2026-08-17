@@ -13,11 +13,21 @@ class AuditObserver
 
     public function updated($model)
     {
+        $changes = $model->getChanges();
+
+        // old_values turi rodyti TIK pasikeitusių laukų senas reikšmes -
+        // duomenų minimizavimo principas (BDAR 5.1.c). Naudojame
+        // getOriginal() su konkrečiu rakto sąrašu, o ne visą įrašą.
+        $oldValuesForChangedKeys = array_intersect_key(
+            $model->getOriginal(),
+            $changes
+        );
+
         $this->record(
             'update',
             $model,
-            $this->filter($model, $model->getOriginal()),
-            $this->filter($model, $model->getChanges())
+            $this->filter($model, $oldValuesForChangedKeys),
+            $this->filter($model, $changes)
         );
     }
 

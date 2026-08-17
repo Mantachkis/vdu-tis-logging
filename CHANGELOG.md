@@ -3,6 +3,24 @@
 Visi svarbūs paketo pakeitimai fiksuojami šiame faile.
 Versijavimas pagal [Semantic Versioning](https://semver.org/): MAJOR.MINOR.PATCH.
 
+## [1.2.0] - 2026-08-17
+
+### Pataisyta (svarbu BDAR/duomenų minimizavimo požiūriu)
+- **`old_values` dabar rodo TIK pasikeitusių laukų senas reikšmes**, o ne visą modelio
+  įrašą. Anksčiau `AuditObserver::updated()` naudojo `$model->getOriginal()`, kuris
+  grąžina visą įrašą (visus stulpelius, net nepasikeitusius) - tai reiškė, kad kiekvienas
+  `update` įrašas nereikalingai atskleisdavo visus modelio laukus (įskaitant potencialiai
+  jautrius, pvz. asmens kodus), net jei pasikeitė tik vienas stulpelis. Dabar `old_values`
+  simetriškas su `new_values` - abu apima tik realiai pasikeitusius laukus.
+- Numatytasis `config('audit.exclude')` sąrašas praplėstas dažniausiais slaptažodžio
+  lauko pavadinimų variantais (`pass`, `passwd`, `pwd`, `api_token`), nes skirtingi
+  projektai/lentelės naudoja skirtingas konvencijas (ne visur `password`).
+
+### Rekomendacija projektams, naudojantiems `Auditable` trait
+Peržiūrėkite kiekvieno audituojamo modelio laukus ir, jei yra domeno-specifinių jautrių
+laukų (asmens kodai, gimimo datos ir pan.), pridėkite juos per modelio `auditExclude()`
+metodą - bendrinis paketo `exclude` sąrašas jų automatiškai atpažinti negali.
+
 ## [1.1.0] - 2026-08-13
 
 ### Pakeista
