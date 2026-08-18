@@ -86,4 +86,35 @@ class EventLoggerTest extends TestCase
         $this->assertSame('App\\Models\\Invoice', $decoded['context']['subject_type']);
         $this->assertSame(42, $decoded['context']['subject_id']);
     }
+
+    /** @test */
+    public function it_resolves_authenticated_user_from_a_non_default_guard()
+    {
+        // Simuliuojame projektą su keliais guard'ais (kaip pilotiniame
+        // projekte: 'web' + custom 'espUser'), kur prisijungusio vartotojo
+        // sesija yra NE numatytajame guard'e.
+        config(['auth.defaults.guard' => 'other_default_guard_with_nobody']);
+        config(['auth.guards.espUser_test' => ['driver' => 'session', 'provider' => 'users']]);
+
+        $user = new class implements \Illuminate\Contracts\Auth\Authenticatable {
+            public $id = 55;
+            public $email = 'espuser@vdu.lt';
+            public function getAuthIdentifierName() { return 'id'; }
+            public function getAuthIdentifier() { return $this->id; }
+            public function getAuthPassword() { return 'hash'; }
+            public function getRememberToken() { return null; }
+            public function setRememberToken($value) {}
+            public function getRememberTokenName() { return 'remember_token'; }
+        };
+
+        \Illuminate\Support\Facades\Auth::guard('espUser_test')->login($user);
+
+        $logger = $this->app->make(EventLogger::class);
+        $logger->info('login', 'Prisijungta per espUser guard');
+
+        $decoded = $this->lastLogEntry('audit');
+
+        $this->assertSame(55, $decoded['context']['user_id']);
+        $this->assertSame('espuser@vdu.lt', $decoded['context']['user_identifier']);
+    }
 }

@@ -83,7 +83,7 @@ class EventLogger
      */
     public function log(string $eventType, string $category, string $description, array $data = []): void
     {
-        $user = Auth::user();
+        $user = $this->resolveAuthenticatedUser();
 
         $context = [
             'occurred_at'     => now()->toIso8601String(),
@@ -101,6 +101,47 @@ class EventLogger
         ];
 
         $this->resolveLogger($eventType)->log($this->mapLevel($eventType), $description, $context);
+    }
+
+    /**
+     * Suranda prisijungusį vartotoją NEPRIKLAUSOMAI nuo to, per kurį guard'ą
+     * jis prisijungė.
+     *
+     * Auth::user() tikrina TIK numatytąjį (config('auth.defaults.guard'))
+     * guard'ą. Projektuose su keliais autentifikacijos būdais (pvz. atskiras
+     * "web" SSO vartotojams ir custom "espUser" guard'as) tai reikštų, kad
+     * bet kuris veiksmas, atliktas per NE-numatytąjį guard'ą, žurnale
+     * atsirastų su user_id=null - reali spraga "kas atliko veiksmą"
+     * reikalavimui. Todėl tikriname numatytąjį guard'ą pirmiausia (greičiausia,
+     * dažniausias atvejis), o jei ten nieko nerasta - visus kitus projekte
+     * config('auth.guards') sukonfigūruotus guard'us.
+     */
+    protected function resolveAuthenticatedUser()
+    {
+        try {
+            if ($user = Auth::user()) {
+                return $user;
+            }
+        } catch (\Throwable $e) {
+            // Numatytasis guard'as gali būti neteisingai/nevisai
+            // sukonfigūruotas projekte - nenutraukiame žurnalizavimo dėl to.
+        }
+
+        foreach (array_keys(config('auth.guards', [])) as $guardName) {
+            try {
+                if ($user = Auth::guard($guardName)->user()) {
+                    return $user;
+                }
+            } catch (\Throwable $e) {
+                // Kai kurie custom/retai naudojami guard'ai gali mesti
+                // klaidą, jei jų driver'is netinkamai sukonfigūruotas
+                // šiam request'ui (pvz. API guard be tokeno). Tyliai
+                // praleidžiame - žurnalizavimas neturi sugriauti request'o.
+                continue;
+            }
+        }
+
+        return null;
     }
 
     /**

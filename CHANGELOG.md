@@ -3,6 +3,19 @@
 Visi svarbūs paketo pakeitimai fiksuojami šiame faile.
 Versijavimas pagal [Semantic Versioning](https://semver.org/): MAJOR.MINOR.PATCH.
 
+## [1.3.0] - 2026-08-18
+
+### Pataisyta (svarbu "kas atliko veiksmą" reikalavimui)
+- **`EventLogger` dabar tikrina VISUS projekte sukonfigūruotus auth guard'us**,
+  ieškodamas prisijungusio vartotojo, o ne tik numatytąjį (`config('auth.defaults.guard')`).
+  Anksčiau, projektuose su keliais autentifikacijos būdais (pvz. `web` SSO vartotojams
+  ir custom `espUser` guard'as vietiniams vartotojams), bet kuris veiksmas, atliktas
+  vartotojo, prisijungusio per NE-numatytąjį guard'ą, žurnale atsirasdavo su
+  `user_id: null` / `user_identifier: null` - reali spraga audito reikalavimui
+  identifikuoti, kas atliko veiksmą. Dabar `Auth::user()` (numatytasis, greičiausias
+  kelias) tikrinamas pirmas, o jei ten nieko nerasta - iteruojami visi kiti
+  `config('auth.guards')` apibrėžti guard'ai.
+
 ## [1.2.0] - 2026-08-17
 
 ### Pataisyta (svarbu BDAR/duomenų minimizavimo požiūriu)
