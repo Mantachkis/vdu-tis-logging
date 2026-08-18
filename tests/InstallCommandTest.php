@@ -15,6 +15,13 @@ class InstallCommandTest extends TestCase
         $this->envBackup = file_exists($this->envPath) ? file_get_contents($this->envPath) : null;
 
         file_put_contents($this->envPath, "APP_NAME=TestApp\n");
+
+        // Švariname bet kokį anksčiau vendor:publish paskelbtą config/audit.php
+        // Testbench "skeleto" aplikacijoje. Laravel vendor:publish NIEKADA
+        // neperrašo jau egzistuojančio failo (be --force), tad sena kopija
+        // iš ankstesnio testo paleidimo priešingu atveju amžinai šešėliuotų
+        // naujus paketo config/audit.php pakeitimus per mergeConfigFrom().
+        $this->cleanPublishedConfig();
     }
 
     protected function tearDown(): void
@@ -25,7 +32,18 @@ class InstallCommandTest extends TestCase
             unlink($this->envPath);
         }
 
+        $this->cleanPublishedConfig();
+
         parent::tearDown();
+    }
+
+    protected function cleanPublishedConfig(): void
+    {
+        $published = config_path('audit.php');
+
+        if (file_exists($published)) {
+            unlink($published);
+        }
     }
 
     /** @test */
