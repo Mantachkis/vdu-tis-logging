@@ -3,6 +3,23 @@
 Visi svarbūs paketo pakeitimai fiksuojami šiame faile.
 Versijavimas pagal [Semantic Versioning](https://semver.org/): MAJOR.MINOR.PATCH.
 
+## [1.5.0] - 2026-08-18
+
+### Pridėta
+- **Universalus failų atsisiuntimų middleware (`LogFileDownloads`)** - automatiškai
+  fiksuoja VISUS failų atsisiuntimus (Excel, PDF, Storage::download(),
+  response()->download() ir t.t.) tikrindamas kiekvieno HTTP atsakymo
+  `Content-Disposition` antraštę. Registruojasi automatiškai per paketo
+  ServiceProvider - projekto `Kernel.php` redaguoti NEREIKIA. Išjungiamas per
+  `AUDIT_LOG_DOWNLOADS=false`.
+- 5 nauji testai, padengiantys middleware funkcionalumą.
+
+### Žinomas apribojimas
+- Middleware apima tik atsisiuntimus (failus su `Content-Disposition` antrašte).
+  Paprastos duomenų peržiūros be failo generavimo vis tiek reikalauja rankinio
+  `LogsViews` trait naudojimo - tai fundamentalus apribojimas (HTTP atsakymas
+  rodant duomenis puslapyje neturi universalaus "tai audituotina peržiūra" požymio).
+
 ## [1.4.0] - 2026-08-18
 
 ### Pridėta

@@ -256,6 +256,34 @@ neįtraukiamas (gali turėti slaptažodžių/tokenų) - loginami tik failas ir e
 Pilną trace rasite standartiniame `storage/logs/laravel.log`, jei reikės detalesnei
 diagnostikai.
 
+## Failų atsisiuntimai - automatinis middleware
+
+**Nereikia jokio kontrolerio ar `Kernel.php` redagavimo.** Paketas automatiškai
+registruoja globalų middleware'į (`LogFileDownloads`), kuris fiksuoja **visus**
+failų atsisiuntimus, nepriklausomai nuo to, kokia biblioteka juos sugeneravo:
+
+- `Excel::download(...)` (maatwebsite/excel)
+- `PDF::download(...)` (barryvdh/laravel-dompdf)
+- `Storage::download(...)`
+- `response()->download(...)`
+- bet koks kitas atsakymas su `Content-Disposition` HTTP antrašte
+
+Veikimo principas: middleware'as tikrina **kiekvieną** HTTP atsakymą, ar tai
+`BinaryFileResponse`/`StreamedResponse` su `Content-Disposition` antrašte -
+jei taip, automatiškai užfiksuoja `category: download` įrašą `audit/` kanale
+su failo pavadinimu, URL ir turinio tipu.
+
+Galima išjungti, jei nepageidaujama:
+```
+AUDIT_LOG_DOWNLOADS=false
+```
+
+**Apribojimas:** tai apima tik **atsisiuntimus** (failus su tinkama HTTP
+antrašte). Paprastos duomenų **peržiūros** ekrane (be failo generavimo) vis
+tiek reikalauja rankinio `LogsViews` trait naudojimo - HTTP atsakymas rodant
+duomenis puslapyje neturi jokio universalaus požymio "tai prasminga duomenų
+peržiūra", tad automatinis aptikimas fundamentaliai neįmanomas.
+
 
 
 ### Teisių paruošimas serveryje (vienkartinis veiksmas prieš pirmą diegimą)

@@ -87,6 +87,20 @@ return [
 
     /*
     |--------------------------------------------------------------------
+    | Automatinis failų atsisiuntimų fiksavimas
+    |--------------------------------------------------------------------
+    |
+    | Jei true (numatytoji reikšmė), paketas automatiškai registruoja
+    | globalų middleware'į, kuris fiksuoja VISUS failų atsisiuntimus
+    | (Excel::download(), PDF::download(), Storage::download() ir t.t.)
+    | be jokio Kernel.php ar kontrolerio redagavimo. Nustatykite false,
+    | jei projektui to nereikia arba norite tvarkytis rankiniu būdu.
+    |
+    */
+    'log_downloads' => env('AUDIT_LOG_DOWNLOADS', true),
+
+    /*
+    |--------------------------------------------------------------------
     | Aktyvus tvarkyklė (driver)
     |--------------------------------------------------------------------
     |
