@@ -3,6 +3,20 @@
 Visi svarbūs paketo pakeitimai fiksuojami šiame faile.
 Versijavimas pagal [Semantic Versioning](https://semver.org/): MAJOR.MINOR.PATCH.
 
+## [1.4.0] - 2026-08-18
+
+### Pridėta
+- **`LogsExceptions` trait** - paskutinis trūkstamas komponentas pilnam žurnalizavimo
+  reikalavimui. Įdedamas į projekto `app/Exceptions/Handler.php`, automatiškai fiksuoja
+  visas nepagautas išimtis kaip `error` tipo įvykius `error/` kanale. Gerbia projekto
+  `$dontReport` sąrašą. Pilnas stack trace su argumentais sąmoningai neįtraukiamas
+  (galimai jautrūs duomenys) - loginamas tik failas ir eilutė.
+- 4 nauji testai, padengiantys `LogsExceptions` funkcionalumą.
+
+Su šia versija paketas dabar padengia VISUS pradinius reikalavimus: kas prisijungė,
+kokius duomenis peržiūrėjo, ką pakeitė, kada, su pilna įvykio rūšių taksonomija
+(info/error/security/system/warning) ir automatiniu klaidų fiksavimu.
+
 ## [1.3.0] - 2026-08-18
 
 ### Pataisyta (svarbu "kas atliko veiksmą" reikalavimui)

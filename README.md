@@ -224,6 +224,38 @@ class InvoiceController extends Controller
 }
 ```
 
+## Klaidos/išimtys - `LogsExceptions` trait
+
+Laravel neturi standartinio event'o nepagautoms išimtims (skirtingai nuo
+Login/Logout/Failed), tad automatinis `error` tipo įvykių fiksavimas reikalauja
+vieno papildomo žingsnio projekto `app/Exceptions/Handler.php` faile:
+
+```php
+use Vdu\TisLogging\Traits\LogsExceptions;
+
+class Handler extends ExceptionHandler
+{
+    use LogsExceptions;
+
+    public function report(Throwable $exception)
+    {
+        $this->logException($exception);
+        parent::report($exception);
+    }
+}
+```
+
+Po šio vieno papildymo, **visos** projekto nepagautos išimtys (500 klaidos ir pan.)
+automatiškai pateks į `error/error-YYYY-MM-DD.log`, su išimties klase, žinute,
+failu ir eilute. Gerbiamas projekto esamas `$dontReport` sąrašas (jei apibrėžtas)
+- validacijos/404 klaidos, kurias Laravel numatytai nutildo, taip pat nepateks
+į audito žurnalą kaip "error" įvykiai.
+
+**Saugumo pastaba:** pilnas stack trace su funkcijų argumentais SĄMONINGAI
+neįtraukiamas (gali turėti slaptažodžių/tokenų) - loginami tik failas ir eilutė.
+Pilną trace rasite standartiniame `storage/logs/laravel.log`, jei reikės detalesnei
+diagnostikai.
+
 
 
 ### Teisių paruošimas serveryje (vienkartinis veiksmas prieš pirmą diegimą)
