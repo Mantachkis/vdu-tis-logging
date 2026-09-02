@@ -3,6 +3,7 @@
 namespace Vdu\TisLogging\Tests;
 
 use Illuminate\Http\Request;
+use Illuminate\Http\Response;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 use Vdu\TisLogging\Http\Middleware\LogFileDownloads;
 
@@ -26,6 +27,30 @@ class LogFileDownloadsTest extends TestCase
 
         $this->assertSame('download', $decoded['context']['category']);
         $this->assertStringContainsString('users.xlsx', $decoded['message']);
+    }
+
+    /** @test */
+    public function it_logs_plain_response_downloads_like_laravel_dompdf_returns()
+    {
+        // barryvdh/laravel-dompdf grąžina PAPRASTĄ Illuminate\Http\Response
+        // (ne BinaryFileResponse/StreamedResponse) su rankomis nustatyta
+        // Content-Disposition antrašte - būtent tokį atvejį šis testas
+        // ir patikrina, nes tai buvo reali klaida ankstesnėje versijoje.
+        $middleware = new LogFileDownloads();
+        $request = Request::create('/invoices/5/pdf', 'GET');
+
+        $response = new Response('%PDF-1.4 binary content here');
+        $response->headers->set('Content-Type', 'application/pdf');
+        $response->headers->set('Content-Disposition', 'attachment; filename="invoice-5.pdf"');
+
+        $middleware->handle($request, function () use ($response) {
+            return $response;
+        });
+
+        $decoded = $this->lastLogEntry('audit');
+
+        $this->assertSame('download', $decoded['context']['category']);
+        $this->assertStringContainsString('invoice-5.pdf', $decoded['message']);
     }
 
     /** @test */

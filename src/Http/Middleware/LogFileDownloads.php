@@ -3,8 +3,7 @@
 namespace Vdu\TisLogging\Http\Middleware;
 
 use Closure;
-use Symfony\Component\HttpFoundation\BinaryFileResponse;
-use Symfony\Component\HttpFoundation\StreamedResponse;
+use Symfony\Component\HttpFoundation\Response;
 use Vdu\TisLogging\EventLogger;
 
 /**
@@ -12,11 +11,17 @@ use Vdu\TisLogging\EventLogger;
  * kokia biblioteka/mechanizmas juos sugeneravo - Excel::download(),
  * PDF::download(), Storage::download(), response()->download(), ir t.t.
  *
- * Veikimo principas: tikrina KIEKVIENĄ HTTP atsakymą, ar tai
- * BinaryFileResponse/StreamedResponse su "Content-Disposition" antrašte
- * (standartinis būdas, kuriuo naršyklei pasakoma "tai atsisiunčiamas
- * failas"). Jei taip - žurnalizuoja, nepriklausomai nuo to, kuris
- * kontroleris/paketas sugeneravo atsakymą.
+ * Veikimo principas: tikrina KIEKVIENĄ HTTP atsakymą, ar jame yra
+ * "Content-Disposition" antraštė (standartinis būdas, kuriuo naršyklei
+ * pasakoma "tai atsisiunčiamas failas"). Jei taip - žurnalizuoja,
+ * nepriklausomai nuo to, kuris kontroleris/paketas sugeneravo atsakymą.
+ *
+ * SVARBU: netikriname konkretaus Response poklasio (BinaryFileResponse/
+ * StreamedResponse), nes daugelis paketų (pvz. barryvdh/laravel-dompdf)
+ * grąžina paprastą Illuminate\Http\Response su rankomis nustatyta
+ * Content-Disposition antrašte, ne specializuotą poklasį. Tikriname
+ * bazinę Symfony\Component\HttpFoundation\Response klasę (kurią turi
+ * VISI Laravel atsakymai) ir pačią antraštę.
  *
  * Registruojamas AUTOMATIŠKAI per AuditLogServiceProvider - projekto
  * Kernel.php redaguoti NEREIKIA. Galima išjungti per
@@ -40,10 +45,7 @@ class LogFileDownloads
 
     protected function maybeLogDownload($request, $response): void
     {
-        $isFileResponse = $response instanceof BinaryFileResponse
-            || $response instanceof StreamedResponse;
-
-        if (!$isFileResponse) {
+        if (!$response instanceof Response) {
             return;
         }
 

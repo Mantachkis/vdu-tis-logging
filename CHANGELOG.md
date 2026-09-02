@@ -3,6 +3,19 @@
 Visi svarbūs paketo pakeitimai fiksuojami šiame faile.
 Versijavimas pagal [Semantic Versioning](https://semver.org/): MAJOR.MINOR.PATCH.
 
+## [1.5.1] - 2026-08-18
+
+### Pataisyta (kritinė klaida)
+- **`LogFileDownloads` middleware nefiksavo PDF atsisiuntimų per `barryvdh/laravel-dompdf`**,
+  nes ankstesnė versija tikrino tik `BinaryFileResponse`/`StreamedResponse` poklasius,
+  o `laravel-dompdf` `download()` metodas grąžina paprastą `Illuminate\Http\Response`
+  su rankomis nustatyta `Content-Disposition` antrašte. Dabar tikrinama bazinė
+  `Symfony\Component\HttpFoundation\Response` klasė (kurią turi VISI Laravel
+  atsakymai), tad middleware veikia nepriklausomai nuo to, kokį konkretų Response
+  poklasį naudoja atsisiuntimą generuojanti biblioteka.
+- Naujas testas, imituojantis būtent `laravel-dompdf` grąžinamo atsakymo tipą,
+  kad ši regresija nebepasikartotų ateityje.
+
 ## [1.5.0] - 2026-08-18
 
 ### Pridėta
