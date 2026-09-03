@@ -102,6 +102,40 @@ class LogFileDownloadsTest extends TestCase
     }
 
     /** @test */
+    public function it_sets_no_cache_headers_on_logged_downloads_by_default()
+    {
+        $middleware = new LogFileDownloads();
+        $request = Request::create('/export/report.xlsx', 'GET');
+
+        $response = new StreamedResponse(function () {});
+        $response->headers->set('Content-Disposition', 'attachment; filename="report.xlsx"');
+
+        $result = $middleware->handle($request, function () use ($response) {
+            return $response;
+        });
+
+        $this->assertStringContainsString('no-store', $result->headers->get('Cache-Control'));
+    }
+
+    /** @test */
+    public function it_does_not_set_no_cache_headers_when_disabled_via_config()
+    {
+        config(['audit.prevent_download_caching' => false]);
+
+        $middleware = new LogFileDownloads();
+        $request = Request::create('/export/public-report.xlsx', 'GET');
+
+        $response = new StreamedResponse(function () {});
+        $response->headers->set('Content-Disposition', 'attachment; filename="public-report.xlsx"');
+
+        $result = $middleware->handle($request, function () use ($response) {
+            return $response;
+        });
+
+        $this->assertNotSame('no-store, no-cache, must-revalidate, max-age=0', $result->headers->get('Cache-Control'));
+    }
+
+    /** @test */
     public function a_logging_error_never_breaks_the_actual_response()
     {
         // Net jei EventLogger viduje kažkas nepavyktų, middleware turi

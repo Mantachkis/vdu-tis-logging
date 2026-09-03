@@ -3,6 +3,18 @@
 Visi svarbūs paketo pakeitimai fiksuojami šiame faile.
 Versijavimas pagal [Semantic Versioning](https://semver.org/): MAJOR.MINOR.PATCH.
 
+## [1.6.0] - 2026-09-03
+
+### Pridėta
+- **`LogFileDownloads` dabar nustato `Cache-Control: no-store` antraštę** kiekvienam
+  užfiksuotam atsisiuntimui. Be to, PAKARTOTINIAI to paties failo atsisiuntimai galėtų
+  būti aptarnaujami naršyklės talpyklos, o serveris (ir auditas) apie tai niekada
+  nesužinotų - realus scenarijus, pastebėtas pilotinio diegimo metu. Taip pat gera
+  saugumo praktika jautriems dokumentams bendro naudojimo kompiuteriuose. Išjungiama
+  per `AUDIT_LOG_PREVENT_DOWNLOAD_CACHING=false`, jei projektui svarbesnė talpyklos
+  nauda našumui.
+- 2 nauji testai.
+
 ## [1.5.1] - 2026-08-18
 
 ### Pataisyta (kritinė klaida)

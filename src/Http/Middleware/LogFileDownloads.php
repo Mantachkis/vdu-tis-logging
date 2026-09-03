@@ -69,6 +69,19 @@ class LogFileDownloads
                 ],
             ]
         );
+
+        // Užkertame kelią naršyklės talpyklai šiam atsakymui - be to,
+        // PAKARTOTINIAI to paties failo atsisiuntimai galėtų "praslysti"
+        // pro auditą (naršyklė aptarnautų iš talpyklos, serveris apie tai
+        // niekada nesužinotų). Taip pat gera saugumo praktika jautriems
+        // dokumentams bendro naudojimo kompiuteriuose. Išjungiama per
+        // AUDIT_LOG_PREVENT_DOWNLOAD_CACHING=false, jei projektui reikia
+        // leisti talpinti (pvz. dideliems, dažnai atsisiunčiamiems viešiems
+        // failams, kur talpykla svarbi našumui).
+        if (config('audit.prevent_download_caching', true)) {
+            $response->headers->set('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');
+            $response->headers->set('Pragma', 'no-cache');
+        }
     }
 
     protected function extractFilename(?string $disposition): ?string

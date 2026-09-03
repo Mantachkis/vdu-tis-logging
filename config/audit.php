@@ -101,6 +101,23 @@ return [
 
     /*
     |--------------------------------------------------------------------
+    | Naršyklės talpyklos blokavimas atsisiunčiamiems failams
+    |--------------------------------------------------------------------
+    |
+    | Jei true (numatytoji reikšmė), kiekvienam užfiksuotam atsisiuntimui
+    | pridedama "Cache-Control: no-store" antraštė - be to, PAKARTOTINIAI
+    | to paties failo atsisiuntimai galėtų būti aptarnaujami iš naršyklės
+    | talpyklos, o serveris (ir auditas) apie tai niekada nesužinotų.
+    | Taip pat gera saugumo praktika jautriems dokumentams bendro
+    | naudojimo kompiuteriuose. Nustatykite false, jei projektui svarbi
+    | talpyklos nauda našumui (pvz. dideli, dažnai atsisiunčiami vieši
+    | failai, kurių audito pilnumas nekritiškas).
+    |
+    */
+    'prevent_download_caching' => env('AUDIT_LOG_PREVENT_DOWNLOAD_CACHING', true),
+
+    /*
+    |--------------------------------------------------------------------
     | Aktyvus tvarkyklė (driver)
     |--------------------------------------------------------------------
     |
