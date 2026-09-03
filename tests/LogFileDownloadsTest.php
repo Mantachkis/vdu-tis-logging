@@ -4,11 +4,44 @@ namespace Vdu\TisLogging\Tests;
 
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
+use Symfony\Component\HttpFoundation\BinaryFileResponse;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 use Vdu\TisLogging\Http\Middleware\LogFileDownloads;
 
 class LogFileDownloadsTest extends TestCase
 {
+    /** @test */
+    public function it_logs_binary_file_response_even_without_content_disposition_header()
+    {
+        // Realus pilotinio diegimo metu pastebėtas atvejis - kai kurie
+        // kontroleriai sukuria BinaryFileResponse tiesiogiai, praleisdami
+        // disposition parametrą (pvz. new BinaryFileResponse($path) be
+        // penkto konstruktoriaus argumento) - Content-Disposition antraštė
+        // tokiu atveju NĖRA automatiškai nustatoma. Pats BinaryFileResponse
+        // tipas jau reiškia "siunčiamas failas", tad turi būti fiksuojamas
+        // besąlygiškai.
+        $tmpFile = tempnam(sys_get_temp_dir(), 'vdu-test-');
+        file_put_contents($tmpFile, 'testinis turinys');
+
+        $middleware = new LogFileDownloads();
+        $request = Request::create('/raw-download', 'GET');
+
+        $response = new BinaryFileResponse($tmpFile);
+        // SĄMONINGAI netikriname Content-Disposition - tikriname atvejį,
+        // kai jos nėra.
+
+        $middleware->handle($request, function () use ($response) {
+            return $response;
+        });
+
+        $decoded = $this->lastLogEntry('audit');
+
+        $this->assertSame('download', $decoded['context']['category']);
+        $this->assertSame(basename($tmpFile), $decoded['context']['context']['filename']);
+
+        unlink($tmpFile);
+    }
+
     /** @test */
     public function it_logs_a_file_download_with_attachment_disposition()
     {

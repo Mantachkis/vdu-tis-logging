@@ -3,6 +3,7 @@
 namespace Vdu\TisLogging\Http\Middleware;
 
 use Closure;
+use Symfony\Component\HttpFoundation\BinaryFileResponse;
 use Symfony\Component\HttpFoundation\Response;
 use Vdu\TisLogging\EventLogger;
 
@@ -11,17 +12,18 @@ use Vdu\TisLogging\EventLogger;
  * kokia biblioteka/mechanizmas juos sugeneravo - Excel::download(),
  * PDF::download(), Storage::download(), response()->download(), ir t.t.
  *
- * Veikimo principas: tikrina KIEKVIENĄ HTTP atsakymą, ar jame yra
- * "Content-Disposition" antraštė (standartinis būdas, kuriuo naršyklei
- * pasakoma "tai atsisiunčiamas failas"). Jei taip - žurnalizuoja,
- * nepriklausomai nuo to, kuris kontroleris/paketas sugeneravo atsakymą.
+ * Veikimo principas - DVI patikros, kad apimtume abu realius atvejus:
  *
- * SVARBU: netikriname konkretaus Response poklasio (BinaryFileResponse/
- * StreamedResponse), nes daugelis paketų (pvz. barryvdh/laravel-dompdf)
- * grąžina paprastą Illuminate\Http\Response su rankomis nustatyta
- * Content-Disposition antrašte, ne specializuotą poklasį. Tikriname
- * bazinę Symfony\Component\HttpFoundation\Response klasę (kurią turi
- * VISI Laravel atsakymai) ir pačią antraštę.
+ * 1) BinaryFileResponse (response()->download(), response()->file(),
+ *    ar tiesiogiai sukurtas BinaryFileResponse) - fiksuojamas VISADA,
+ *    net jei Content-Disposition antraštė nenustatyta (kai kurie
+ *    kontroleriai sukuria BinaryFileResponse tiesiogiai, praleisdami
+ *    disposition parametrą - tai pastebėta pilotinio diegimo metu).
+ *    Pats šis tipas jau reiškia "siunčiamas failas".
+ *
+ * 2) Bet kuris kitas Response su "Content-Disposition" antrašte
+ *    (pvz. barryvdh/laravel-dompdf grąžina paprastą Illuminate\Http\Response
+ *    su rankomis nustatyta antrašte, ne specializuotą poklasį).
  *
  * Registruojamas AUTOMATIŠKAI per AuditLogServiceProvider - projekto
  * Kernel.php redaguoti NEREIKIA. Galima išjungti per
@@ -45,17 +47,11 @@ class LogFileDownloads
 
     protected function maybeLogDownload($request, $response): void
     {
-        if (!$response instanceof Response) {
+        [$shouldLog, $filename, $disposition] = $this->inspectResponse($response);
+
+        if (!$shouldLog) {
             return;
         }
-
-        $disposition = $response->headers->get('Content-Disposition');
-
-        if (!$disposition) {
-            return;
-        }
-
-        $filename = $this->extractFilename($disposition);
 
         app(EventLogger::class)->info(
             'download',
@@ -65,7 +61,7 @@ class LogFileDownloads
                     'url' => $request->fullUrl(),
                     'filename' => $filename,
                     'content_type' => $response->headers->get('Content-Type'),
-                    'disposition' => stripos($disposition, 'inline') === 0 ? 'inline' : 'attachment',
+                    'disposition' => $disposition,
                 ],
             ]
         );
@@ -82,6 +78,37 @@ class LogFileDownloads
             $response->headers->set('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');
             $response->headers->set('Pragma', 'no-cache');
         }
+    }
+
+    /**
+     * @return array{0: bool, 1: ?string, 2: ?string} [ar_loginti, failo_pavadinimas, disposition_tipas]
+     */
+    protected function inspectResponse($response): array
+    {
+        if ($response instanceof BinaryFileResponse) {
+            $disposition = $response->headers->get('Content-Disposition');
+            $filename = $disposition
+                ? $this->extractFilename($disposition)
+                : basename($response->getFile()->getPathname());
+
+            return [true, $filename, stripos((string) $disposition, 'inline') === 0 ? 'inline' : 'attachment'];
+        }
+
+        if ($response instanceof Response) {
+            $disposition = $response->headers->get('Content-Disposition');
+
+            if (!$disposition) {
+                return [false, null, null];
+            }
+
+            return [
+                true,
+                $this->extractFilename($disposition),
+                stripos($disposition, 'inline') === 0 ? 'inline' : 'attachment',
+            ];
+        }
+
+        return [false, null, null];
     }
 
     protected function extractFilename(?string $disposition): ?string

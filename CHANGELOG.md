@@ -3,6 +3,20 @@
 Visi svarbūs paketo pakeitimai fiksuojami šiame faile.
 Versijavimas pagal [Semantic Versioning](https://semver.org/): MAJOR.MINOR.PATCH.
 
+## [1.6.1] - 2026-09-03
+
+### Pataisyta (kritinė klaida)
+- **`LogFileDownloads` nefiksavo `BinaryFileResponse` atsakymų be `Content-Disposition`
+  antraštės**, pastebėta realiame pilotiniame diegime (`UserCompetenceController::
+  downloadMyPortfolio()` tipo kontroleriai, kurie sukuria `BinaryFileResponse`
+  tiesiogiai, praleisdami disposition parametrą). Dabar `BinaryFileResponse`
+  fiksuojamas BESĄLYGIŠKAI (pats šis tipas jau reiškia "siunčiamas failas"),
+  o failo pavadinimas, jei antraštės nėra, paimamas iš paties failo kelio.
+  Kiti `Response` tipai (pvz. `laravel-dompdf` grąžinamas paprastas `Response`)
+  ir toliau reikalauja `Content-Disposition` antraštės, kad nebūtų klaidingai
+  fiksuojami paprasti HTML puslapiai.
+- Naujas testas, tiksliai atkuriantis šį atvejį.
+
 ## [1.6.0] - 2026-09-03
 
 ### Pridėta
