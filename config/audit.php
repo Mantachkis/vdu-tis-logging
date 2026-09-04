@@ -74,6 +74,44 @@ return [
 
     /*
     |--------------------------------------------------------------------
+    | Automatinis VISŲ Eloquent modelių audito fiksavimas
+    |--------------------------------------------------------------------
+    |
+    | Jei true (numatytoji reikšmė), paketas automatiškai audituoja
+    | KIEKVIENO projekto Eloquent modelio create/update/delete įvykius,
+    | BE JOKIO "use Auditable;" pridėjimo modelio faile. Modeliai, kurie
+    | JAU naudoja Auditable trait'ą, praleidžiami šiame globaliame
+    | mechanizme (kad nebūtų dubliuoto fiksavimo) - jų auditavimą
+    | toliau tvarko pats trait'as.
+    |
+    | Nustatykite false, jei norite tvarkytis IŠIMTINAI rankiniu būdu
+    | (tik su Auditable trait pažymėtus modelius).
+    |
+    */
+    'audit_all_models' => env('AUDIT_LOG_ALL_MODELS', true),
+
+    /*
+    |--------------------------------------------------------------------
+    | Modeliai, kurių NEREIKIA automatiškai audituoti
+    |--------------------------------------------------------------------
+    |
+    | Pilnai kvalifikuoti klasių pavadinimai (su namespace), kuriuos
+    | globalus audito mechanizmas turi PRALEISTI. Naudinga aukšto
+    | dažnio, techniniams, ar nejautriems modeliams (pvz. sesijos,
+    | notifikacijų, cache lentelės), kuriems auditas tik kurtų
+    | nereikalingą triukšmą žurnaluose.
+    |
+    | Pavyzdys:
+    |   'exclude_models' => [
+    |       \App\Models\Session::class,
+    |       \App\Models\PageView::class,
+    |   ],
+    |
+    */
+    'exclude_models' => [],
+
+    /*
+    |--------------------------------------------------------------------
     | Saugojimo terminas dienomis
     |--------------------------------------------------------------------
     |

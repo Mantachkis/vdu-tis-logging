@@ -3,6 +3,35 @@
 Visi svarbūs paketo pakeitimai fiksuojami šiame faile.
 Versijavimas pagal [Semantic Versioning](https://semver.org/): MAJOR.MINOR.PATCH.
 
+## [2.0.0] - 2026-09-03
+
+### LŪŽTANTIS PAKEITIMAS (breaking change)
+- **Numatytoji elgsena pasikeitė: nuo šiol VISI Eloquent modeliai audituojami
+  automatiškai**, be jokio `use Auditable;` pridėjimo modelio faile. Anksčiau
+  buvo audituojami TIK modeliai su eksplicitiškai pridėtu `Auditable` trait.
+  Tai reiškia, kad po šio atnaujinimo projektų žurnalai staiga pradės pildytis
+  daug daugiau `create`/`update`/`delete` įrašų nei anksčiau.
+
+### Kaip išjungti/pritaikyti, jei nepageidaujama
+- `AUDIT_LOG_ALL_MODELS=false` - visiškai išjungia globalų mechanizmą,
+  grįžtama prie ankstesnio elgesio (tik `Auditable` trait pažymėti modeliai).
+- `config('audit.exclude_models')` - pilnai kvalifikuotų klasių sąrašas,
+  kuriuos globalus mechanizmas turi praleisti (pvz. aukšto dažnio, techniniai
+  modeliai).
+
+### Pridėta
+- **`GlobalModelAuditListener`** - registruojasi per Laravel wildcard
+  Eloquent event'us (`eloquent.created: *` ir t.t.), automatiškai audituoja
+  kiekvieną modelį projekte.
+- **`ModelAuditRecorder`** - bendra logika, naudojama tiek `AuditObserver`
+  (rankinis `Auditable` trait), tiek naujo globalaus mechanizmo, kad abu
+  keliai elgtųsi tiksliai vienodai (tas pats duomenų minimizavimas, tas
+  pats jautrių laukų filtravimas per `config('audit.exclude')` ir
+  `auditExclude()`).
+- Modeliai su `Auditable` trait automatiškai praleidžiami globaliame
+  mechanizme, kad nebūtų dubliuoto fiksavimo.
+- 7 nauji testai, padengiantys globalaus audito funkcionalumą.
+
 ## [1.7.0] - 2026-09-03
 
 ### Pridėta

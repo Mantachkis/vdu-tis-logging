@@ -184,7 +184,45 @@ integracija), atitinkami Laravel event'ai NEBUS sukviesti automatiškai. Tokiu
 atveju reikia rankinio `AuditLog::security(...)` kvietimo tose šakose - žr.
 projekto login kontrolerio analizę (jei tokia buvo pateikta atskirai).
 
-## Modelio pokyčiai - `Auditable` trait
+## Modelio pokyčiai
+
+### Automatinis fiksavimas (numatytoji elgsena nuo v2.0.0)
+
+**Nereikia jokio kontrolerio ar modelio redagavimo.** Paketas automatiškai
+audituoja **VISŲ** projekto Eloquent modelių create/update/delete įvykius,
+su senomis ir naujomis reikšmėmis (`old_values` rodo tik pasikeitusius
+laukus - BDAR duomenų minimizavimas).
+
+Galima išjungti, jei nepageidaujama:
+```
+AUDIT_LOG_ALL_MODELS=false
+```
+
+Konkretiems modeliams, kurių audituoti nereikia (pvz. aukšto dažnio,
+techniniai, ar nejautrūs modeliai), pridėkite juos `config/audit.php`:
+```php
+'exclude_models' => [
+    \App\Models\Session::class,
+    \App\Models\PageView::class,
+],
+```
+
+Modeliui apibrėžus `auditExclude()` metodą, globalus mechanizmas jį gerbia
+lygiai taip pat, kaip ir su `Auditable` trait (žr. žemiau):
+```php
+class Invoice extends Model
+{
+    public function auditExclude(): array
+    {
+        return ['internal_notes'];
+    }
+}
+```
+
+### Rankinis fiksavimas - `Auditable` trait
+
+Jei `AUDIT_LOG_ALL_MODELS=false`, arba tiesiog norite eksplicitiškai pažymėti
+konkrečius modelius (aiškumui kode), naudokite `Auditable` trait:
 
 ```php
 use Vdu\TisLogging\Traits\Auditable;
@@ -203,7 +241,9 @@ class Invoice extends Model
 }
 ```
 
-Create/update/delete veiksmai loginami automatiškai, su senomis ir naujomis reikšmėmis.
+Modeliai su `Auditable` trait automatiškai **praleidžiami** globaliame
+mechanizme (kad nebūtų dubliuoto fiksavimo) - jų auditavimą tvarko pats
+trait'as, identiška logika abiem atvejais.
 
 ## Peržiūra - `LogsViews` trait
 

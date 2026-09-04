@@ -10,6 +10,7 @@ use Illuminate\Support\Facades\Event;
 use Illuminate\Support\ServiceProvider;
 use Vdu\TisLogging\Console\InstallCommand;
 use Vdu\TisLogging\Http\Middleware\LogFileDownloads;
+use Vdu\TisLogging\Listeners\GlobalModelAuditListener;
 use Vdu\TisLogging\Listeners\LogFailedLogin;
 use Vdu\TisLogging\Listeners\LogLogout;
 use Vdu\TisLogging\Listeners\LogSuccessfulLogin;
@@ -18,7 +19,8 @@ class AuditLogServiceProvider extends ServiceProvider
 {
     /**
      * Bootstrapping: config publish, migracijų kelias, auth event listener'iai,
-     * Artisan komandos, automatinis atsisiuntimų middleware.
+     * globalus modelio audito listener'is, Artisan komandos, automatinis
+     * atsisiuntimų middleware.
      */
     public function boot()
     {
@@ -31,6 +33,16 @@ class AuditLogServiceProvider extends ServiceProvider
         Event::listen(Login::class, LogSuccessfulLogin::class);
         Event::listen(Logout::class, LogLogout::class);
         Event::listen(Failed::class, LogFailedLogin::class);
+
+        // Globalus visų Eloquent modelių audito fiksavimas - veikia
+        // NEPRIKLAUSOMAI nuo console/web konteksto, nes modelio pokyčiai
+        // vyksta ir per artisan komandas/queue job'us/seederius, ne tik
+        // per web request'us.
+        if (config('audit.audit_all_models', true)) {
+            Event::listen('eloquent.created: *', [GlobalModelAuditListener::class, 'handleCreated']);
+            Event::listen('eloquent.updated: *', [GlobalModelAuditListener::class, 'handleUpdated']);
+            Event::listen('eloquent.deleted: *', [GlobalModelAuditListener::class, 'handleDeleted']);
+        }
 
         if ($this->app->runningInConsole()) {
             $this->commands([
