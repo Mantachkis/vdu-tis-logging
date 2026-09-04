@@ -33,6 +33,11 @@ class TestCase extends BaseTestCase
             'database' => ':memory:',
             'prefix' => '',
         ]);
+
+        // In-memory cache driver LogFileDownloads dedup testams - be šito
+        // Testbench gali bandyti naudoti "file" driver'į su nesukonfigūruotu
+        // keliu.
+        $app['config']->set('cache.default', 'array');
     }
 
     /**

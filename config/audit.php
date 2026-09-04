@@ -118,6 +118,23 @@ return [
 
     /*
     |--------------------------------------------------------------------
+    | Pasikartojančių atsisiuntimų sujungimas (deduplication)
+    |--------------------------------------------------------------------
+    |
+    | Naršyklės (pvz. Chrome PDF viewer) gali siųsti DVI atskiras užklausas
+    | TAI PAČIAI URL vienam vartotojo veiksmui - pirma peržiūrai naršyklėje,
+    | tada, paspaudus atsisiuntimo mygtuką, dar kartą, kad išsaugotų failą.
+    | Serveris negali patikimai atskirti šių dviejų atvejų. Jei per šį
+    | sekundžių skaičių tas pats vartotojas (ar IP, jei neprisijungęs)
+    | pakartotinai kviečia tą pačią URL, antras kvietimas NEBEFIKSUOJAMAS -
+    | laikoma tuo pačiu veiksmu. 0 = išjungti, fiksuoti kiekvieną kvietimą
+    | atskirai.
+    |
+    */
+    'download_dedup_seconds' => env('AUDIT_LOG_DOWNLOAD_DEDUP_SECONDS', 10),
+
+    /*
+    |--------------------------------------------------------------------
     | Aktyvus tvarkyklė (driver)
     |--------------------------------------------------------------------
     |

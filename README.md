@@ -265,24 +265,42 @@ failų atsisiuntimus, nepriklausomai nuo to, kokia biblioteka juos sugeneravo:
 - `Excel::download(...)` (maatwebsite/excel)
 - `PDF::download(...)` (barryvdh/laravel-dompdf)
 - `Storage::download(...)`
-- `response()->download(...)`
+- `response()->download(...)`, `response()->file(...)`
+- tiesiogiai sukurtas `BinaryFileResponse` (net be `Content-Disposition` antraštės)
 - bet koks kitas atsakymas su `Content-Disposition` HTTP antrašte
 
-Veikimo principas: middleware'as tikrina **kiekvieną** HTTP atsakymą, ar tai
-`BinaryFileResponse`/`StreamedResponse` su `Content-Disposition` antrašte -
-jei taip, automatiškai užfiksuoja `category: download` įrašą `audit/` kanale
-su failo pavadinimu, URL ir turinio tipu.
+Veikimo principas: `BinaryFileResponse` fiksuojamas **besąlygiškai** (pats šis
+tipas jau reiškia "siunčiamas failas"), o kiti `Response` tipai - tik jei turi
+`Content-Disposition` antraštę. Užfiksuoja `category: download` įrašą `audit/`
+kanale su failo pavadinimu, URL ir turinio tipu.
 
 Galima išjungti, jei nepageidaujama:
 ```
 AUDIT_LOG_DOWNLOADS=false
 ```
 
+### Naršyklės talpykla ir pasikartojantys kvietimai
+
+Kiekvienam užfiksuotam atsisiuntimui middleware'as prideda `Cache-Control:
+no-store` antraštę - be to, pakartotiniai to paties failo atsisiuntimai galėtų
+būti aptarnaujami iš naršyklės talpyklos, o auditas apie tai niekada
+nesužinotų. Išjungiama per `AUDIT_LOG_PREVENT_DOWNLOAD_CACHING=false`.
+
+Kai kurios naršyklės (pvz. Chrome PDF viewer) taip pat siunčia **dvi**
+atskiras užklausas tai pačiai URL vienam vartotojo veiksmui - pirma peržiūrai,
+tada, paspaudus atsisiuntimo mygtuką viduje, dar kartą, kad išsaugotų failą.
+Serveris negali patikimai atskirti šių dviejų atvejų, tad žinutėje sąžiningai
+rašoma **"peržiūrėtas/atsisiųstas"**, o pasikartojantys tos pačios URL
+kvietimai per `AUDIT_LOG_DOWNLOAD_DEDUP_SECONDS` (numatytoji - 10 sek.)
+sujungiami į **vieną** žurnalo įrašą. Nustatykite `0`, jei norite fiksuoti
+kiekvieną kvietimą atskirai.
+
 **Apribojimas:** tai apima tik **atsisiuntimus** (failus su tinkama HTTP
-antrašte). Paprastos duomenų **peržiūros** ekrane (be failo generavimo) vis
-tiek reikalauja rankinio `LogsViews` trait naudojimo - HTTP atsakymas rodant
-duomenis puslapyje neturi jokio universalaus požymio "tai prasminga duomenų
-peržiūra", tad automatinis aptikimas fundamentaliai neįmanomas.
+antrašte arba `BinaryFileResponse`). Paprastos duomenų **peržiūros** ekrane
+(be failo generavimo) vis tiek reikalauja rankinio `LogsViews` trait
+naudojimo - HTTP atsakymas rodant duomenis puslapyje neturi jokio universalaus
+požymio "tai prasminga duomenų peržiūra", tad automatinis aptikimas
+fundamentaliai neįmanomas.
 
 
 

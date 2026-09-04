@@ -3,6 +3,23 @@
 Visi svarbūs paketo pakeitimai fiksuojami šiame faile.
 Versijavimas pagal [Semantic Versioning](https://semver.org/): MAJOR.MINOR.PATCH.
 
+## [1.7.0] - 2026-09-03
+
+### Pridėta
+- **Pasikartojančių atsisiuntimų sujungimas (deduplication).** Kai kurios
+  naršyklės (pvz. Chrome PDF viewer) siunčia DVI atskiras užklausas tai
+  pačiai URL vienam vartotojo veiksmui - pirma peržiūrai, tada, paspaudus
+  atsisiuntimo mygtuką viduje, dar kartą, kad išsaugotų failą. Pastebėta
+  realiame pilotiniame diegime (2 vartotojo veiksmai sukūrė 4 žurnalo
+  įrašus). Dabar pasikartojantys tos pačios URL kvietimai per
+  `AUDIT_LOG_DOWNLOAD_DEDUP_SECONDS` (numatytoji - 10 sek.) sujungiami į
+  VIENĄ įrašą. Dedup raktas apima vartotojo tapatybę (arba IP, jei
+  neprisijungęs), tad skirtingi vartotojai NĖRA sujungiami tarpusavyje.
+- Žurnalo žinutė pakeista iš "Failas atsisiųstas" į **"Failas
+  peržiūrėtas/atsisiųstas"**, sąžiningai atspindint, kad serveris negali
+  patikimai atskirti šių dviejų atvejų.
+- 4 nauji testai, padengiantys dedup logiką.
+
 ## [1.6.1] - 2026-09-03
 
 ### Pataisyta (kritinė klaida)

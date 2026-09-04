@@ -169,6 +169,97 @@ class LogFileDownloadsTest extends TestCase
     }
 
     /** @test */
+    public function it_deduplicates_repeated_downloads_of_the_same_url_within_the_window()
+    {
+        $middleware = new LogFileDownloads();
+        $request = Request::create('/user/download_portfolio/report.pdf', 'GET');
+
+        $makeResponse = function () {
+            $response = new StreamedResponse(function () {});
+            $response->headers->set('Content-Disposition', 'attachment; filename="report.pdf"');
+            return $response;
+        };
+
+        // Pirmas kvietimas - turi būti užfiksuotas.
+        $middleware->handle($request, $makeResponse);
+        // Antras kvietimas TAI PAČIAI URL iš karto po pirmo - turi būti
+        // laikomas tuo pačiu veiksmu (peržiūra + atsisiuntimas) ir
+        // NEBEFIKSUOJAMAS antrą kartą.
+        $middleware->handle($request, $makeResponse);
+
+        $file = $this->findLogFile('audit');
+        $lines = array_values(array_filter(explode("\n", trim(file_get_contents($file)))));
+
+        $this->assertCount(1, $lines, 'Turėjo būti tik VIENAS įrašas, ne du dubliuoti');
+    }
+
+    /** @test */
+    public function it_logs_the_message_as_viewed_or_downloaded_since_the_two_cannot_be_reliably_distinguished()
+    {
+        $middleware = new LogFileDownloads();
+        $request = Request::create('/user/download_portfolio/dokumentas.pdf', 'GET');
+
+        $response = new StreamedResponse(function () {});
+        $response->headers->set('Content-Disposition', 'attachment; filename="dokumentas.pdf"');
+
+        $middleware->handle($request, function () use ($response) {
+            return $response;
+        });
+
+        $decoded = $this->lastLogEntry('audit');
+
+        $this->assertStringContainsString('peržiūrėtas/atsisiųstas', $decoded['message']);
+    }
+
+    /** @test */
+    public function it_logs_again_after_the_dedup_window_expires()
+    {
+        config(['audit.download_dedup_seconds' => 0]);
+
+        $middleware = new LogFileDownloads();
+        $request = Request::create('/user/download_portfolio/report2.pdf', 'GET');
+
+        $makeResponse = function () {
+            $response = new StreamedResponse(function () {});
+            $response->headers->set('Content-Disposition', 'attachment; filename="report2.pdf"');
+            return $response;
+        };
+
+        $middleware->handle($request, $makeResponse);
+        $middleware->handle($request, $makeResponse);
+
+        $file = $this->findLogFile('audit');
+        $lines = array_values(array_filter(explode("\n", trim(file_get_contents($file)))));
+
+        $this->assertCount(2, $lines, 'Kai dedup=0, kiekvienas kvietimas turi būti fiksuojamas atskirai');
+    }
+
+    /** @test */
+    public function different_users_downloading_the_same_url_are_not_deduplicated_together()
+    {
+        $middleware = new LogFileDownloads();
+        $request1 = Request::create('/user/download_portfolio/shared.pdf', 'GET');
+        $request1->server->set('REMOTE_ADDR', '10.0.0.1');
+
+        $request2 = Request::create('/user/download_portfolio/shared.pdf', 'GET');
+        $request2->server->set('REMOTE_ADDR', '10.0.0.2');
+
+        $makeResponse = function () {
+            $response = new StreamedResponse(function () {});
+            $response->headers->set('Content-Disposition', 'attachment; filename="shared.pdf"');
+            return $response;
+        };
+
+        $middleware->handle($request1, $makeResponse);
+        $middleware->handle($request2, $makeResponse);
+
+        $file = $this->findLogFile('audit');
+        $lines = array_values(array_filter(explode("\n", trim(file_get_contents($file)))));
+
+        $this->assertCount(2, $lines, 'Skirtingi IP (neprisijungę vartotojai) neturi būti sujungiami');
+    }
+
+    /** @test */
     public function a_logging_error_never_breaks_the_actual_response()
     {
         // Net jei EventLogger viduje kažkas nepavyktų, middleware turi
