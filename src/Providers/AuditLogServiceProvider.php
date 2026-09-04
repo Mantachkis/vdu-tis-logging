@@ -38,10 +38,16 @@ class AuditLogServiceProvider extends ServiceProvider
         // NEPRIKLAUSOMAI nuo console/web konteksto, nes modelio pokyčiai
         // vyksta ir per artisan komandas/queue job'us/seederius, ne tik
         // per web request'us.
+        //
+        // Naudojame "Klasė@metodas" eilutės sintaksę, o NE masyvą
+        // [Klasė::class, 'metodas'] - senesnės Laravel versijos (5.7)
+        // masyvo atveju bando kviesti metodą statiškai, vietoj to, kad
+        // išspręstų klasę per konteinerį. Eilutės sintaksė veikia
+        // vienodai visose palaikomose versijose (5.7 - 9.x).
         if (config('audit.audit_all_models', true)) {
-            Event::listen('eloquent.created: *', [GlobalModelAuditListener::class, 'handleCreated']);
-            Event::listen('eloquent.updated: *', [GlobalModelAuditListener::class, 'handleUpdated']);
-            Event::listen('eloquent.deleted: *', [GlobalModelAuditListener::class, 'handleDeleted']);
+            Event::listen('eloquent.created: *', GlobalModelAuditListener::class.'@handleCreated');
+            Event::listen('eloquent.updated: *', GlobalModelAuditListener::class.'@handleUpdated');
+            Event::listen('eloquent.deleted: *', GlobalModelAuditListener::class.'@handleDeleted');
         }
 
         if ($this->app->runningInConsole()) {
