@@ -163,4 +163,75 @@ class QueryAuditTest extends TestCase
 
         $this->assertStringContainsString('[TRUNCATED]', $decoded['context']['new_values']['title']);
     }
+
+    /** @test */
+    public function it_captures_old_values_for_updates()
+    {
+        DB::table('test_widgets')->insert(['title' => 'Sena antraste', 'sort' => 1]);
+        DB::table('test_widgets')->where('id', 1)->update(['title' => 'Nauja antraste']);
+
+        $decoded = $this->lastLogEntry('audit');
+
+        $this->assertSame('Sena antraste', $decoded['context']['old_values']['title']);
+        $this->assertSame('Nauja antraste', $decoded['context']['new_values']['title']);
+    }
+
+    /** @test */
+    public function it_only_reports_columns_that_actually_changed()
+    {
+        DB::table('test_widgets')->insert(['title' => 'Antraste', 'sort' => 7]);
+
+        // Forma siuncia VISUS laukus, bet realiai keiciasi tik "sort".
+        DB::table('test_widgets')->where('id', 1)->update([
+            'title' => 'Antraste',
+            'sort' => 9,
+        ]);
+
+        $decoded = $this->lastLogEntry('audit');
+
+        $this->assertArrayNotHasKey('title', $decoded['context']['new_values']);
+        $this->assertSame(7, (int) $decoded['context']['old_values']['sort']);
+        $this->assertSame(9, $decoded['context']['new_values']['sort']);
+    }
+
+    /** @test */
+    public function updates_that_change_nothing_are_not_logged()
+    {
+        DB::table('test_widgets')->insert(['title' => 'Nepakis', 'sort' => 1]);
+
+        $file = $this->findLogFile('audit');
+        $before = count(array_filter(explode("\n", trim(file_get_contents($file)))));
+
+        DB::table('test_widgets')->where('id', 1)->update(['title' => 'Nepakis', 'sort' => 1]);
+
+        $after = count(array_filter(explode("\n", trim(file_get_contents($file)))));
+
+        $this->assertSame($before, $after, 'UPDATE be realiu pakeitimu neturi buti fiksuojamas');
+    }
+
+    /** @test */
+    public function it_captures_the_deleted_row_as_old_values()
+    {
+        DB::table('test_widgets')->insert(['title' => 'Istrinamas', 'sort' => 3]);
+        DB::table('test_widgets')->where('id', 1)->delete();
+
+        $decoded = $this->lastLogEntry('audit');
+
+        $this->assertSame('db_delete', $decoded['context']['category']);
+        $this->assertSame('Istrinamas', $decoded['context']['old_values']['title']);
+    }
+
+    /** @test */
+    public function old_values_capture_can_be_disabled()
+    {
+        config(['audit.capture_old_values' => false]);
+
+        DB::table('test_widgets')->insert(['title' => 'Sena', 'sort' => 1]);
+        DB::table('test_widgets')->where('id', 1)->update(['title' => 'Nauja']);
+
+        $decoded = $this->lastLogEntry('audit');
+
+        $this->assertNull($decoded['context']['old_values']);
+        $this->assertSame('Nauja', $decoded['context']['new_values']['title']);
+    }
 }

@@ -6,7 +6,9 @@ use Illuminate\Auth\Events\Failed;
 use Illuminate\Auth\Events\Login;
 use Illuminate\Auth\Events\Logout;
 use Illuminate\Contracts\Http\Kernel;
+use Illuminate\Database\Connection;
 use Illuminate\Database\Events\QueryExecuted;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\ServiceProvider;
 use Vdu\TisLogging\Console\InstallCommand;
@@ -16,6 +18,7 @@ use Vdu\TisLogging\Listeners\LogFailedLogin;
 use Vdu\TisLogging\Listeners\LogLogout;
 use Vdu\TisLogging\Listeners\LogSuccessfulLogin;
 use Vdu\TisLogging\Listeners\QueryAuditListener;
+use Vdu\TisLogging\Support\OldValuesSnapshotStore;
 
 class AuditLogServiceProvider extends ServiceProvider
 {
@@ -61,6 +64,28 @@ class AuditLogServiceProvider extends ServiceProvider
         // metu, nereikalaujant aplikacijos perkrovimo.
         Event::listen(QueryExecuted::class, QueryAuditListener::class.'@handle');
 
+        // Senų reikšmių nuskaitymas PRIEŠ UPDATE/DELETE vykdymą - be to
+        // SQL lygmens įrašai negalėtų parodyti "iš ko į ką pakeitė".
+        //
+        // Laravel 8+ : per DB::beforeExecuting (veikia su BET KOKIU
+        // draiveriu, įskaitant Oracle per yajra/laravel-oci8).
+        // Laravel 5.7-7.x : per pakeistas jungties klases (žr. žemiau).
+        $snapshotStore = $this->app->make(OldValuesSnapshotStore::class);
+
+        if ($snapshotStore->isSupported()) {
+            DB::beforeExecuting(function ($query, $bindings, $connection) use ($snapshotStore) {
+                if (config('audit.log_queries', false)) {
+                    $snapshotStore->capture($query, $bindings, $connection);
+                }
+            });
+        } else {
+            // Registruojame boot() metode, nes čia jau įvykdyti VISŲ
+            // paketų register() metodai - tad matome ir svetimus
+            // resolverius (pvz. yajra Oracle) ir galime juos apgaubti,
+            // o ne perrašyti.
+            $this->registerLegacyConnectionResolvers();
+        }
+
         if ($this->app->runningInConsole()) {
             $this->commands([
                 InstallCommand::class,
@@ -85,6 +110,87 @@ class AuditLogServiceProvider extends ServiceProvider
             return new \Vdu\TisLogging\EventLogger();
         });
 
+        // BŪTINA singleton - snapshot'ai išsaugomi prieš užklausą
+        // ir paimami "QueryExecuted" metu, tad tai turi būti TAS PATS
+        // objektas, ne du atskiri egzemplioriai.
+        $this->app->singleton(OldValuesSnapshotStore::class);
+
         $this->app->alias(\Vdu\TisLogging\EventLogger::class, 'audit-log');
+    }
+
+    /**
+     * Įjungia senų reikšmių perėmimą Laravel 5.7-7.x versijose, kur nėra
+     * DB::beforeExecuting().
+     *
+     * Naudojami DU skirtingi būdai:
+     *
+     * 1) Draiveriai BE svetimo resolverio (mysql, pgsql, sqlite, sqlsrv) -
+     *    tiesiog registruojame savo jungties poklasį.
+     *
+     * 2) Draiveriai SU svetimu resolveriu (pvz. Oracle per yajra) -
+     *    resolverio NEPERRAŠOME (jis atlieka gyvybiškai svarbią
+     *    konfigūraciją: NLS datų formatus, dešimtainius skirtukus,
+     *    CURRENT_SCHEMA). Vietoj to jį APGAUBIAME: leidžiame atlikti
+     *    visą darbą, tada perkeliame gautą būseną į savo poklasį.
+     *    Jei kas nors nepavyktų - grąžinama originali jungtis, tad
+     *    projektas veikia normaliai, tik be old_values.
+     */
+    protected function registerLegacyConnectionResolvers(): void
+    {
+        if (!method_exists(Connection::class, 'getResolver')) {
+            return;
+        }
+
+        $standard = [
+            'mysql' => \Vdu\TisLogging\Database\AuditingMySqlConnection::class,
+            'pgsql' => \Vdu\TisLogging\Database\AuditingPostgresConnection::class,
+            'sqlite' => \Vdu\TisLogging\Database\AuditingSQLiteConnection::class,
+            'sqlsrv' => \Vdu\TisLogging\Database\AuditingSqlServerConnection::class,
+        ];
+
+        foreach ($standard as $driver => $class) {
+            if (Connection::getResolver($driver) === null) {
+                Connection::resolverFor($driver, function ($pdo, $database, $prefix, $config) use ($class) {
+                    return new $class($pdo, $database, $prefix, $config);
+                });
+            }
+        }
+
+        $this->decorateOracleResolver();
+    }
+
+    /**
+     * Apgaubia yajra/laravel-oci8 resolverį, išsaugant visą jo atliekamą
+     * Oracle konfigūraciją.
+     */
+    protected function decorateOracleResolver(): void
+    {
+        if (!class_exists(\Yajra\Oci8\Oci8Connection::class)) {
+            return;
+        }
+
+        $original = Connection::getResolver('oracle');
+
+        if ($original === null) {
+            return;
+        }
+
+        Connection::resolverFor('oracle', function ($pdo, $database, $prefix, $config) use ($original) {
+            // Originalus resolveris atlieka VISĄ darbą: prisijungia,
+            // nustato NLS seanso kintamuosius, schemą, edition.
+            $base = $original($pdo, $database, $prefix, $config);
+
+            try {
+                return \Vdu\TisLogging\Database\ConnectionStateCopier::copyInto(
+                    $base,
+                    \Vdu\TisLogging\Database\AuditingOci8Connection::class
+                );
+            } catch (\Throwable $e) {
+                // Saugus atsitraukimas: jei būsenos perkelti nepavyko,
+                // grąžiname originalią, pilnai veikiančią jungtį.
+                // Auditas veiks be old_values, bet projektas nenukentės.
+                return $base;
+            }
+        });
     }
 }

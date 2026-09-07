@@ -4,6 +4,7 @@ namespace Vdu\TisLogging\Listeners;
 
 use Illuminate\Database\Events\QueryExecuted;
 use Vdu\TisLogging\EventLogger;
+use Vdu\TisLogging\Support\OldValuesSnapshotStore;
 use Vdu\TisLogging\Support\SqlStatementParser;
 
 /**
@@ -12,19 +13,14 @@ use Vdu\TisLogging\Support\SqlStatementParser;
  *
  *     DB::table('news')->where('id', 5)->update([...]);
  *     Model::where('id', 5)->update([...]);   // query builder, ne instancija
- *     DB::statement('UPDATE ...');
  *
- * Tokiais atvejais Eloquent NEMETA jokių modelio event'ų, tad
- * GlobalModelAuditListener jų nepamato - ši klasė užpildo tą spragą.
+ * Stulpeliai surišami su reikšmėmis (SqlStatementParser), o senos reikšmės
+ * nuskaitomos prieš užklausos vykdymą (OldValuesSnapshotStore), tad žurnale
+ * matoma "iš ko į ką pakeitė" net ir be Eloquent modelio.
  *
- * Stulpeliai surišami su reikšmėmis (žr. SqlStatementParser), tad žurnale
- * matomas skaitomas "stulpelis => nauja reikšmė" žemėlapis, o ne žalias
- * SQL su atskiru poziciniu parametrų masyvu.
- *
- * APRIBOJIMAS: NĖRA old_values. SQL užklausa nežino, kokios reikšmės buvo
- * prieš pakeitimą - tai žino tik Eloquent modelis, įkeltas iš DB. Jei
- * reikia "iš ko į ką pakeitė", kontroleryje būtina naudoti modelio
- * instanciją ($model->save()), ne DB::table()->update().
+ * Rodomi TIK realiai pasikeitę laukai - jei UPDATE sakinys perrašo stulpelį
+ * ta pačia reikšme (dažna praktika, kai forma siunčia visus laukus), toks
+ * stulpelis į žurnalą nepatenka.
  */
 class QueryAuditListener
 {
@@ -52,12 +48,21 @@ class QueryAuditListener
             return;
         }
 
-        $bindings = $this->redactBindings($event->bindings);
-        $parsed = app(SqlStatementParser::class)->parse($sql, $bindings);
+        $rawBindings = $event->bindings;
+        $parsed = app(SqlStatementParser::class)->parse($sql, $this->redactBindings($rawBindings));
+
+        // Senos reikšmės, nuskaitytos PRIEŠ šios užklausos vykdymą.
+        $snapshot = app(OldValuesSnapshotStore::class)->pull($sql, $rawBindings);
+
+        [$oldValues, $newValues] = $this->resolveChanges($statement, $parsed['values'], $snapshot);
+
+        // Jei UPDATE nieko realiai nepakeitė (visi laukai perrašyti tomis
+        // pačiomis reikšmėmis), nefiksuojame - tai ne pakeitimas.
+        if ($statement === 'update' && $newValues !== null && empty($newValues)) {
+            return;
+        }
 
         $table = $parsed['table'];
-        $description = 'Duomenų bazės pakeitimas ('.strtoupper($statement).')'
-            .($table ? ": {$table}" : '');
 
         $context = [
             'table' => $table,
@@ -68,28 +73,100 @@ class QueryAuditListener
         ];
 
         // Žalią SQL pridedame TIK jei nepavyko išanalizuoti stulpelių -
-        // kitaip įrašas be reikalo išsipučia, o visa naudinga informacija
-        // jau yra new_values/conditions laukuose.
-        if ($parsed['values'] === null) {
+        // kitaip įrašas be reikalo išsipučia.
+        if ($parsed['values'] === null && $statement !== 'delete') {
             $context['sql'] = $sql;
-            $context['bindings'] = $bindings;
+            $context['bindings'] = $this->redactBindings($rawBindings);
         }
 
         app(EventLogger::class)->info(
             'db_'.$statement,
-            $description,
+            'Duomenų bazės pakeitimas ('.strtoupper($statement).')'.($table ? ": {$table}" : ''),
             [
-                'new_values' => $parsed['values'],
+                'old_values' => $oldValues,
+                'new_values' => $newValues,
                 'context' => $context,
             ]
         );
     }
 
     /**
-     * Praleidžia lenteles, išvardintas config('audit.exclude_query_tables').
-     * Naudinga aukšto dažnio techninėms lentelėms (sessions, cache, jobs),
-     * kurios kurtų tik triukšmą.
+     * Suformuoja old_values/new_values poras, paliekant TIK realiai
+     * pasikeitusius laukus.
+     *
+     * @return array{0: ?array, 1: ?array}
      */
+    protected function resolveChanges(string $statement, ?array $parsedValues, ?array $snapshot): array
+    {
+        if ($statement === 'insert') {
+            return [null, $parsedValues];
+        }
+
+        if ($statement === 'delete') {
+            // Ištrinant "sena reikšmė" yra visas įrašas, naujos nėra.
+            return [$this->flattenSnapshot($snapshot), null];
+        }
+
+        // UPDATE
+        if ($snapshot === null || $parsedValues === null) {
+            // Senų reikšmių nuskaityti nepavyko - grąžiname bent naujas.
+            return [null, $parsedValues];
+        }
+
+        $old = [];
+        $new = [];
+
+        foreach ($parsedValues as $column => $newValue) {
+            $oldValue = $this->lookupInSnapshot($snapshot, $column);
+
+            // Palyginame kaip tekstą - DB grąžina eilutes/skaičius
+            // nenuosekliai (pvz. "5" vs 5), tad griežtas === duotų
+            // klaidingų "pakeitimų".
+            if ((string) $oldValue === (string) $newValue) {
+                continue;
+            }
+
+            $old[$column] = $this->redactValue($oldValue);
+            $new[$column] = $newValue;
+        }
+
+        return [$old ?: null, $new];
+    }
+
+    /**
+     * Suranda stulpelio reikšmę snapshot'e, nepaisant raidžių registro
+     * (Oracle grąžina DIDŽIOSIOMIS, MySQL - kaip apibrėžta schemoje).
+     */
+    protected function lookupInSnapshot(array $snapshot, string $column)
+    {
+        $row = $snapshot[0] ?? [];
+
+        if (array_key_exists($column, $row)) {
+            return $row[$column];
+        }
+
+        foreach ($row as $key => $value) {
+            if (strcasecmp($key, $column) === 0) {
+                return $value;
+            }
+        }
+
+        return null;
+    }
+
+    protected function flattenSnapshot(?array $snapshot): ?array
+    {
+        if (empty($snapshot)) {
+            return null;
+        }
+
+        $rows = array_map(function ($row) {
+            return array_map([$this, 'redactValue'], $row);
+        }, $snapshot);
+
+        return count($rows) === 1 ? $rows[0] : $rows;
+    }
+
     protected function isExcludedTable(string $sql): bool
     {
         $excluded = config('audit.exclude_query_tables', []);
@@ -103,45 +180,41 @@ class QueryAuditListener
         return false;
     }
 
-    /**
-     * Bando užmaskuoti jautrias reikšmes parametrų sąraše.
-     *
-     * SVARBU: SQL lygmenyje parametrai yra tik pozicinis masyvas, be
-     * stulpelių pavadinimų, tad tiksliai žinoti "šis parametras yra
-     * slaptažodis" NEĮMANOMA. Taikome euristiką. Jei jūsų projekte per
-     * DB::table() rašomi slaptažodžiai, geriau tokias lenteles įtraukti
-     * į exclude_query_tables.
-     */
     protected function redactBindings(array $bindings): array
     {
+        return array_map([$this, 'redactValue'], $bindings);
+    }
+
+    /**
+     * Užmaskuoja jautrias reikšmes ir apriboja ilgį.
+     */
+    protected function redactValue($value)
+    {
+        if (!is_string($value)) {
+            return $value;
+        }
+
+        // Bcrypt/Argon hash'ai - akivaizdžiai slaptažodžiai.
+        if (preg_match('/^\$(2[aby]|argon2)/', $value)) {
+            return '[REDACTED]';
+        }
+
+        // Base64 įterpti paveikslėliai - dažni WYSIWYG redaktoriuose,
+        // gali būti šimtų kilobaitų dydžio.
+        if (stripos($value, 'data:image/') !== false) {
+            $value = preg_replace(
+                '/data:image\/[a-z+]+;base64,[A-Za-z0-9+\/=]+/i',
+                '[BASE64_IMAGE]',
+                $value
+            );
+        }
+
         $maxLength = (int) config('audit.max_binding_length', 500);
 
-        return array_map(function ($value) use ($maxLength) {
-            if (!is_string($value)) {
-                return $value;
-            }
+        if (mb_strlen($value) > $maxLength) {
+            return mb_substr($value, 0, $maxLength).'... [TRUNCATED]';
+        }
 
-            // Bcrypt/Argon hash'ai - akivaizdžiai slaptažodžiai.
-            if (preg_match('/^\$(2[aby]|argon2)/', $value)) {
-                return '[REDACTED]';
-            }
-
-            // Base64 įterpti paveikslėliai - dažni WYSIWYG redaktoriuose,
-            // gali būti šimtų kilobaitų dydžio. Auditui pakanka fakto,
-            // kad paveikslėlis buvo įterptas.
-            if (stripos($value, 'data:image/') !== false) {
-                $value = preg_replace(
-                    '/data:image\/[a-z+]+;base64,[A-Za-z0-9+\/=]+/i',
-                    '[BASE64_IMAGE]',
-                    $value
-                );
-            }
-
-            if (mb_strlen($value) > $maxLength) {
-                return mb_substr($value, 0, $maxLength).'... [TRUNCATED]';
-            }
-
-            return $value;
-        }, $bindings);
+        return $value;
     }
 }

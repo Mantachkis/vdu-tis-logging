@@ -172,6 +172,38 @@ return [
 
     /*
     |--------------------------------------------------------------------
+    | Senų reikšmių nuskaitymas SQL užklausoms
+    |--------------------------------------------------------------------
+    |
+    | Taikoma tik kai log_queries = true. Prieš kiekvieną UPDATE/DELETE
+    | atliekama PAPILDOMA SELECT užklausa, kad būtų nuskaityta įrašo
+    | būsena prieš pakeitimą - be to neįmanoma parodyti "iš ko į ką
+    | pakeitė", kai naudojamas DB::table() vietoj Eloquent modelio.
+    |
+    | REIKALAUJA Laravel 8+ (DB::beforeExecuting). Senesnėse versijose
+    | (5.7-7.x) tyliai išjungiama.
+    |
+    | Našumo kaina: viena papildoma SELECT užklausa kiekvienam
+    | UPDATE/DELETE. Nustatykite false, jei našumas svarbesnis už
+    | senų reikšmių fiksavimą.
+    |
+    */
+    'capture_old_values' => env('AUDIT_LOG_CAPTURE_OLD_VALUES', true),
+
+    /*
+    |--------------------------------------------------------------------
+    | Maksimalus nuskaitomų eilučių kiekis senoms reikšmėms
+    |--------------------------------------------------------------------
+    |
+    | Masiniai atnaujinimai (UPDATE be griežtų WHERE sąlygų) gali paliesti
+    | tūkstančius eilučių - be šio apribojimo vienas žurnalo įrašas
+    | išaugtų iki milžiniško dydžio.
+    |
+    */
+    'old_values_max_rows' => env('AUDIT_LOG_OLD_VALUES_MAX_ROWS', 5),
+
+    /*
+    |--------------------------------------------------------------------
     | Saugojimo terminas dienomis
     |--------------------------------------------------------------------
     |

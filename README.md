@@ -290,9 +290,45 @@ milžinišką triukšmą be audito vertės.
 
 Įrašo kategorijos: `db_insert`, `db_update`, `db_delete`.
 
-**Apribojimai, kuriuos svarbu suprasti:**
-- **Nėra `old_values`** - SQL užklausa nežino, kokios reikšmės buvo prieš
-  pakeitimą (tai žino tik iš DB įkeltas Eloquent modelis).
+### Senos reikšmės (`old_values`)
+
+Prieš kiekvieną `UPDATE`/`DELETE` paketas atlieka papildomą `SELECT`, kad
+nuskaitytų įrašo būseną prieš pakeitimą - tad žurnale matoma **"iš ko į ką
+pakeitė"** net ir naudojant `DB::table()`.
+
+Rodomi **tik realiai pasikeitę** laukai: jei forma siunčia visus stulpelius,
+bet dalis jų perrašoma tomis pačiomis reikšmėmis, tokie stulpeliai į žurnalą
+nepatenka. `UPDATE`, kuris nieko nepakeitė, apskritai nefiksuojamas.
+
+```
+AUDIT_LOG_CAPTURE_OLD_VALUES=true    # numatytoji reikšmė
+AUDIT_LOG_OLD_VALUES_MAX_ROWS=5      # riba masiniams atnaujinimams
+```
+
+**Suderinamumas su Laravel versijomis:**
+
+| Laravel | Mechanizmas | Draiveriai |
+|---|---|---|
+| 8.x - 9.x | `DB::beforeExecuting` | visi |
+| 5.7 - 7.x | pakeista jungties klasė (`Connection::resolverFor`) | mysql, pgsql, sqlite, sqlsrv |
+| 5.7 - 7.x | apgaubtas svetimas resolveris | Oracle (`yajra/laravel-oci8`) |
+
+**Oracle senesnėse Laravel versijose:** `yajra/laravel-oci8` registruoja savo
+jungties resolverį, kuris atlieka gyvybiškai svarbią konfigūraciją (NLS datų
+formatai, dešimtainiai skirtukai, `CURRENT_SCHEMA`). Paketas jo **neperrašo** -
+leidžia atlikti visą darbą, o tada perkelia gautą jungties būseną į savo
+poklasį per refleksiją. PDO objektas lieka tas pats, tad Oracle seanso
+nustatymai galioja toliau. Jei perkėlimas dėl kokios nors priežasties
+nepavyktų, grąžinama originali jungtis - projektas veikia normaliai, tik
+be `old_values`.
+
+**Našumo kaina:** viena papildoma `SELECT` užklausa kiekvienam
+`UPDATE`/`DELETE`. Nustatykite `false`, jei našumas svarbesnis.
+
+**Apribojimai:**
+- Senos reikšmės nuskaitomos tik jei `WHERE` sąlygos atpažįstamos
+  (`stulpelis = ?` forma). Sudėtingoms sąlygoms (`IN`, subqueries, raw
+  `WHERE`) `old_values` nebus.
 - Nėra `subject_type`/`subject_id` modelio konteksto - tik SQL sakinys
   ir parametrai.
 - Generuoja **žymiai daugiau** įrašų, įskaitant dubliuotus: pakeitimas per

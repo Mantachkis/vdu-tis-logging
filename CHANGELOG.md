@@ -3,6 +3,50 @@
 Visi svarbūs paketo pakeitimai fiksuojami šiame faile.
 Versijavimas pagal [Semantic Versioning](https://semver.org/): MAJOR.MINOR.PATCH.
 
+## [2.3.0] - 2026-09-07
+
+### Pridėta
+- **`old_values` SQL lygmens įrašams - "iš ko į ką pakeitė".** Iki šiol SQL
+  užklausų fiksavimas rodė tik naujas reikšmes, nes `QueryExecuted` event'as
+  suveikia jau PO užklausos įvykdymo. Dabar `OldValuesSnapshotStore` per
+  `DB::beforeExecuting` perima užklausą PRIEŠ vykdymą ir nuskaito esamą įrašo
+  būseną, tad žurnale matomos ir senos, ir naujos reikšmės net kai naudojamas
+  `DB::table()->update()` vietoj Eloquent modelio.
+- **Rodomi tik realiai pasikeitę laukai.** Jei forma siunčia visus stulpelius,
+  bet dalis perrašoma tomis pačiomis reikšmėmis, tokie stulpeliai į žurnalą
+  nepatenka. `UPDATE`, kuris nieko nepakeitė, apskritai nefiksuojamas.
+- `DELETE` atveju ištrinto įrašo turinys fiksuojamas kaip `old_values`.
+- Naujos config opcijos: `AUDIT_LOG_CAPTURE_OLD_VALUES` (numatytoji `true`),
+  `AUDIT_LOG_OLD_VALUES_MAX_ROWS` (numatytoji 5 - riba masiniams atnaujinimams).
+- 5 nauji testai.
+
+### Suderinamumas
+- **Laravel 8.x-9.x**: per `DB::beforeExecuting` - veikia su visais draiveriais,
+  įskaitant Oracle (`yajra/laravel-oci8`).
+- **Laravel 5.7-7.x**: `beforeExecuting` ten neegzistuoja, o `StatementPrepared`
+  event'as rašymo užklausoms nesuveikia, tad naudojamos pakeistos jungties
+  klasės per `Connection::resolverFor()` (mysql, pgsql, sqlite, sqlsrv).
+- **Oracle senesnėse Laravel versijose**: `yajra/laravel-oci8` resolveris
+  NEPERRAŠOMAS (jis nustato NLS datų formatus, dešimtainius skirtukus,
+  `CURRENT_SCHEMA` - perrašius sugriūtų visas projektas). Vietoj to jis
+  apgaubiamas: leidžiama atlikti visą darbą, tada jungties būsena
+  perkeliama į paketo poklasį per refleksiją (`ConnectionStateCopier`),
+  išsaugant TĄ PATĮ PDO objektą su jau nustatytais seanso kintamaisiais.
+  Nepavykus - grąžinama originali jungtis, projektas nenukenčia.
+
+### Svarbi detalė - tingus (lazy) prisijungimas
+- Laravel `pdo` savybė iš pradžių būna `Closure` (jungtis atidaroma tik
+  prireikus). `ConnectionStateCopier` prieš kopijavimą priverstinai išsprendžia
+  šį `Closure` - kitaip originali jungtis ir kopija jį iškviestų atskirai ir
+  atsidarytų DVI skirtingos DB jungtys, o Oracle atveju antroji būtų BE yajra
+  nustatytų NLS seanso kintamųjų (sugriūtų datų formatai ir dešimtainiai
+  skirtukai).
+
+### Apribojimai
+- Našumo kaina: viena papildoma `SELECT` užklausa kiekvienam `UPDATE`/`DELETE`.
+- Senos reikšmės nuskaitomos tik jei `WHERE` sąlygos atpažįstamos
+  (`stulpelis = ?` forma).
+
 ## [2.2.0] - 2026-09-07
 
 ### Pridėta
