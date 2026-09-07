@@ -6,6 +6,7 @@ use Illuminate\Auth\Events\Failed;
 use Illuminate\Auth\Events\Login;
 use Illuminate\Auth\Events\Logout;
 use Illuminate\Contracts\Http\Kernel;
+use Illuminate\Database\Events\QueryExecuted;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\ServiceProvider;
 use Vdu\TisLogging\Console\InstallCommand;
@@ -14,6 +15,7 @@ use Vdu\TisLogging\Listeners\GlobalModelAuditListener;
 use Vdu\TisLogging\Listeners\LogFailedLogin;
 use Vdu\TisLogging\Listeners\LogLogout;
 use Vdu\TisLogging\Listeners\LogSuccessfulLogin;
+use Vdu\TisLogging\Listeners\QueryAuditListener;
 
 class AuditLogServiceProvider extends ServiceProvider
 {
@@ -49,6 +51,15 @@ class AuditLogServiceProvider extends ServiceProvider
             Event::listen('eloquent.updated: *', GlobalModelAuditListener::class.'@handleUpdated');
             Event::listen('eloquent.deleted: *', GlobalModelAuditListener::class.'@handleDeleted');
         }
+
+        // Query lygmens fiksavimas - pagauna DB::table()->update() ir kitas
+        // užklausas, kurios APEINA Eloquent modelius (tokiais atvejais
+        // jokie modelio event'ai nemetami). Listener'is registruojamas
+        // visada, bet pats tikrina config('audit.log_queries') vykdymo
+        // metu ir iškart grįžta, jei išjungta (pagal nutylėjimą - taip).
+        // Toks registravimas leidžia įjungti/išjungti per config runtime
+        // metu, nereikalaujant aplikacijos perkrovimo.
+        Event::listen(QueryExecuted::class, QueryAuditListener::class.'@handle');
 
         if ($this->app->runningInConsole()) {
             $this->commands([

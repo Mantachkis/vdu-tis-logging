@@ -3,6 +3,30 @@
 Visi svarbūs paketo pakeitimai fiksuojami šiame faile.
 Versijavimas pagal [Semantic Versioning](https://semver.org/): MAJOR.MINOR.PATCH.
 
+## [2.1.0] - 2026-09-07
+
+### Pridėta
+- **`QueryAuditListener` - SQL užklausų lygmens fiksavimas.** Pastebėta realiame
+  pilotiniame diegime: kontroleriai, naudojantys `DB::table('x')->update([...])`
+  arba `Model::where(...)->update([...])`, APEINA Eloquent modelio instanciją,
+  todėl jokie modelio event'ai nemetami ir `GlobalModelAuditListener` tokių
+  pakeitimų nepamato. Naujas listener'is fiksuoja visas INSERT/UPDATE/DELETE
+  užklausas SQL lygmeniu (kategorijos `db_insert`, `db_update`, `db_delete`).
+- Įjungiama per `AUDIT_LOG_QUERIES=true` (pagal nutylėjimą IŠJUNGTA, nes
+  generuoja daug įrašų ir dubliuojasi su Eloquent fiksavimu).
+- `config('audit.exclude_query_tables')` - aukšto dažnio techninių lentelių
+  sąrašas (sessions, cache, jobs ir kt.), praleidžiamas fiksuojant.
+- Jautrių duomenų maskavimas parametruose: bcrypt/argon hash'ai keičiami į
+  `[REDACTED]`, ilgesnės nei 500 simbolių reikšmės trumpinamos.
+- SELECT užklausos sąmoningai NEfiksuojamos.
+- 8 nauji testai.
+
+### Žinomas apribojimas
+- SQL lygmens įrašuose NĖRA `old_values` - užklausa nežino, kas buvo prieš
+  pakeitimą. Tikslus "iš ko į ką pakeitė" įmanomas TIK per Eloquent modelio
+  instanciją (`$model->save()`). Jei tai kritiška, kontrolerius reikia
+  pertvarkyti naudoti modelio instancijas vietoj `DB::table()`.
+
 ## [2.0.0] - 2026-09-03
 
 ### LŪŽTANTIS PAKEITIMAS (breaking change)

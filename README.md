@@ -245,6 +245,75 @@ Modeliai su `Auditable` trait automatiškai **praleidžiami** globaliame
 mechanizme (kad nebūtų dubliuoto fiksavimo) - jų auditavimą tvarko pats
 trait'as, identiška logika abiem atvejais.
 
+### ⚠️ Svarbu: `DB::table()` apeina Eloquent
+
+Eloquent modelio event'ai **nesuveikia**, kai duomenys keičiami apeinant
+modelio instanciją:
+
+```php
+DB::table('news')->where('id', 5)->update([...]);   // ❌ NEfiksuojama
+Model::where('id', 5)->update([...]);               // ❌ NEfiksuojama (query builder)
+
+$news = Model::find(5);
+$news->title = 'Naujas';
+$news->save();                                      // ✅ Fiksuojama
+```
+
+Tai fundamentalus Laravel elgesys - `DB::table()` vykdo tiesioginę SQL
+užklausą, nesukurdamas modelio instancijos, tad joks modelio event'as
+nemetamas. **Jei jūsų projekte tokių vietų yra** (dažna praktika senesniuose
+kontroleriuose), turite du variantus:
+
+**A) Pertvarkyti kontrolerius** naudoti modelio instancijas - švariausia,
+ir tik taip gausite tikslų `old_values` ("iš ko į ką pakeitė"):
+
+```php
+$news = Makademija_news::find($request->id);
+$news->fill(['news_header' => $request->news_header, ...]);
+$news->save();
+```
+
+**B) Įjungti SQL užklausų lygmens fiksavimą** (žr. žemiau) - apima viską
+be kontrolerių redagavimo, bet be `old_values`.
+
+## SQL užklausų fiksavimas (`AUDIT_LOG_QUERIES`)
+
+Įjungiama per `.env`:
+```
+AUDIT_LOG_QUERIES=true
+```
+
+Fiksuoja **visas** `INSERT`/`UPDATE`/`DELETE` užklausas SQL lygmeniu,
+nepriklausomai nuo to, kaip jos sukurtos (Eloquent, `DB::table()`,
+`DB::statement()`). `SELECT` užklausos **nefiksuojamos** - jos kurtų
+milžinišką triukšmą be audito vertės.
+
+Įrašo kategorijos: `db_insert`, `db_update`, `db_delete`.
+
+**Apribojimai, kuriuos svarbu suprasti:**
+- **Nėra `old_values`** - SQL užklausa nežino, kokios reikšmės buvo prieš
+  pakeitimą (tai žino tik iš DB įkeltas Eloquent modelis).
+- Nėra `subject_type`/`subject_id` modelio konteksto - tik SQL sakinys
+  ir parametrai.
+- Generuoja **žymiai daugiau** įrašų, įskaitant dubliuotus: pakeitimas per
+  modelį bus užfiksuotas du kartus (kaip `update` ir kaip `db_update`).
+- Jautrūs duomenys parametruose maskuojami tik euristiškai (bcrypt/argon
+  hash'ai → `[REDACTED]`, ilgesni nei 500 simbolių → trumpinami). SQL
+  lygmenyje neįmanoma patikimai susieti parametro su stulpelio pavadinimu,
+  tad jei per `DB::table()` rašomi slaptažodžiai, geriau tas lenteles
+  įtraukti į `exclude_query_tables`.
+
+Aukšto dažnio techninės lentelės praleidžiamos per `config/audit.php`:
+```php
+'exclude_query_tables' => [
+    'sessions', 'cache', 'jobs', 'failed_jobs', 'password_resets',
+],
+```
+
+**Rekomendacija:** naudokite laikinai, kol pertvarkysite kontrolerius
+naudoti modelio instancijas, arba nuolat, jei pilnas SQL lygmens
+padengimas svarbesnis už žurnalų glaustumą ir `old_values` tikslumą.
+
 ## Peržiūra - `LogsViews` trait
 
 Eloquent neturi "peržiūrėjimo" įvykio, tad šis kvietimas visada bus rankinis:

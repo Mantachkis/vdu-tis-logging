@@ -112,6 +112,53 @@ return [
 
     /*
     |--------------------------------------------------------------------
+    | SQL užklausų lygmens fiksavimas (DB::table ir kt.)
+    |--------------------------------------------------------------------
+    |
+    | Eloquent modelio event'ai NESUVEIKIA, kai duomenys keičiami apeinant
+    | modelio instanciją:
+    |
+    |     DB::table('news')->where('id', 5)->update([...]);
+    |     Model::where('id', 5)->update([...]);   // query builder
+    |
+    | Jei jūsų projekte tokių vietų yra (dažna praktika senesniuose
+    | kontroleriuose), įjunkite šią opciją - tada fiksuojamos VISOS
+    | INSERT/UPDATE/DELETE užklausos SQL lygmeniu.
+    |
+    | SVARBŪS APRIBOJIMAI:
+    | - NĖRA old_values (SQL nežino, kas buvo prieš pakeitimą - tai žino
+    |   tik iš DB įkeltas Eloquent modelis).
+    | - Nėra subject_type/subject_id modelio konteksto.
+    | - Generuoja ŽYMIAI daugiau įrašų, įskaitant dubliuotus su Eloquent
+    |   fiksavimu (tas pats pakeitimas per modelį bus užfiksuotas du kartus:
+    |   kaip "update" ir kaip "db_update").
+    |
+    | Rekomendacija: naudokite laikinai, kol pertvarkysite kontrolerius
+    | naudoti modelio instancijas ($model->save()), arba nuolat, jei
+    | pilnas SQL lygmens padengimas svarbesnis už žurnalų glaustumą.
+    |
+    */
+    'log_queries' => env('AUDIT_LOG_QUERIES', false),
+
+    /*
+    |--------------------------------------------------------------------
+    | Lentelės, kurių SQL užklausų NEFIKSUOTI
+    |--------------------------------------------------------------------
+    |
+    | Taikoma tik kai log_queries = true. Aukšto dažnio techninės lentelės,
+    | kurios kurtų tik triukšmą žurnaluose.
+    |
+    */
+    'exclude_query_tables' => [
+        'sessions',
+        'cache',
+        'jobs',
+        'failed_jobs',
+        'password_resets',
+    ],
+
+    /*
+    |--------------------------------------------------------------------
     | Saugojimo terminas dienomis
     |--------------------------------------------------------------------
     |
