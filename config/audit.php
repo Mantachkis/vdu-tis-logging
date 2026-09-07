@@ -159,6 +159,19 @@ return [
 
     /*
     |--------------------------------------------------------------------
+    | Maksimalus SQL parametro reikšmės ilgis žurnale
+    |--------------------------------------------------------------------
+    |
+    | Taikoma tik kai log_queries = true. Ilgesnės reikšmės trumpinamos,
+    | kad vienas žurnalo įrašas neišaugtų iki šimtų kilobaitų (dažna
+    | problema su WYSIWYG redaktorių HTML turiniu). Base64 įterpti
+    | paveikslėliai atskirai pakeičiami į [BASE64_IMAGE] žymą.
+    |
+    */
+    'max_binding_length' => env('AUDIT_LOG_MAX_BINDING_LENGTH', 500),
+
+    /*
+    |--------------------------------------------------------------------
     | Saugojimo terminas dienomis
     |--------------------------------------------------------------------
     |

@@ -3,6 +3,26 @@
 Visi svarbūs paketo pakeitimai fiksuojami šiame faile.
 Versijavimas pagal [Semantic Versioning](https://semver.org/): MAJOR.MINOR.PATCH.
 
+## [2.2.0] - 2026-09-07
+
+### Pridėta
+- **`SqlStatementParser` - stulpeliai surišami su reikšmėmis.** Anksčiau SQL
+  lygmens įrašai buvo praktiškai neskaitomi: stulpelių pavadinimai SQL sakinyje,
+  reikšmės - atskirame poziciniame masyve, tad administratoriui tekdavo juos
+  suvesti mintyse. Dabar žurnale matomas tvarkingas `new_values` žemėlapis
+  (`stulpelis => reikšmė`) ir atskiras `conditions` laukas (WHERE sąlygos),
+  plius `table` laukas su lentelės pavadinimu.
+- Lentelės pavadinimas įtraukiamas į įrašo žinutę.
+- Žalias SQL sakinys pridedamas TIK jei analizė nepavyko - kitaip įrašas be
+  reikalo išsipūstų.
+- **Base64 paveikslėliai keičiami į `[BASE64_IMAGE]` žymą.** WYSIWYG redaktorių
+  turinys su įterptais paveikslėliais generuodavo šimtų kilobaitų dydžio žurnalo
+  įrašus (pastebėta realiame diegime).
+- `AUDIT_LOG_MAX_BINDING_LENGTH` - konfigūruojamas parametrų trumpinimo ribos
+  ilgis (numatytoji - 500 simbolių).
+- 17 naujų/atnaujintų testų, įskaitant Oracle stiliaus SQL (dvigubos kabutės,
+  didžiosios raidės), MySQL backtick sintaksę ir kelių WHERE sąlygų atvejus.
+
 ## [2.1.0] - 2026-09-07
 
 ### Pridėta

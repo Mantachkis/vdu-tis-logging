@@ -4,6 +4,7 @@ namespace Vdu\TisLogging\Listeners;
 
 use Illuminate\Database\Events\QueryExecuted;
 use Vdu\TisLogging\EventLogger;
+use Vdu\TisLogging\Support\SqlStatementParser;
 
 /**
  * Fiksuoja VISAS duomenis keičiančias SQL užklausas (INSERT/UPDATE/DELETE),
@@ -16,16 +17,14 @@ use Vdu\TisLogging\EventLogger;
  * Tokiais atvejais Eloquent NEMETA jokių modelio event'ų, tad
  * GlobalModelAuditListener jų nepamato - ši klasė užpildo tą spragą.
  *
- * APRIBOJIMAI (svarbu suprasti):
- * - NĖRA old_values. SQL užklausa nežino, kokios reikšmės buvo prieš
- *   pakeitimą - tai žino tik Eloquent modelis, įkeltas iš DB. Jei jums
- *   reikia "iš ko į ką pakeitė", kontroleryje reikia naudoti modelio
- *   instanciją ($model->save()), ne DB::table()->update().
- * - Fiksuojamas SQL sakinys ir parametrai, ne modelio kontekstas
- *   (nėra subject_type/subject_id).
- * - Jautrūs duomenys parametruose užmaskuojami tik apytiksliai
- *   (žr. redactBindings) - SQL lygmenyje neįmanoma patikimai susieti
- *   parametro su stulpelio pavadinimu.
+ * Stulpeliai surišami su reikšmėmis (žr. SqlStatementParser), tad žurnale
+ * matomas skaitomas "stulpelis => nauja reikšmė" žemėlapis, o ne žalias
+ * SQL su atskiru poziciniu parametrų masyvu.
+ *
+ * APRIBOJIMAS: NĖRA old_values. SQL užklausa nežino, kokios reikšmės buvo
+ * prieš pakeitimą - tai žino tik Eloquent modelis, įkeltas iš DB. Jei
+ * reikia "iš ko į ką pakeitė", kontroleryje būtina naudoti modelio
+ * instanciją ($model->save()), ne DB::table()->update().
  */
 class QueryAuditListener
 {
@@ -53,16 +52,35 @@ class QueryAuditListener
             return;
         }
 
+        $bindings = $this->redactBindings($event->bindings);
+        $parsed = app(SqlStatementParser::class)->parse($sql, $bindings);
+
+        $table = $parsed['table'];
+        $description = 'Duomenų bazės pakeitimas ('.strtoupper($statement).')'
+            .($table ? ": {$table}" : '');
+
+        $context = [
+            'table' => $table,
+            'statement' => $statement,
+            'conditions' => $parsed['conditions'],
+            'connection' => $event->connectionName,
+            'time_ms' => $event->time,
+        ];
+
+        // Žalią SQL pridedame TIK jei nepavyko išanalizuoti stulpelių -
+        // kitaip įrašas be reikalo išsipučia, o visa naudinga informacija
+        // jau yra new_values/conditions laukuose.
+        if ($parsed['values'] === null) {
+            $context['sql'] = $sql;
+            $context['bindings'] = $bindings;
+        }
+
         app(EventLogger::class)->info(
             'db_'.$statement,
-            'Duomenų bazės pakeitimas ('.strtoupper($statement).')',
+            $description,
             [
-                'context' => [
-                    'sql' => $sql,
-                    'bindings' => $this->redactBindings($event->bindings),
-                    'connection' => $event->connectionName,
-                    'time_ms' => $event->time,
-                ],
+                'new_values' => $parsed['values'],
+                'context' => $context,
             ]
         );
     }
@@ -77,9 +95,6 @@ class QueryAuditListener
         $excluded = config('audit.exclude_query_tables', []);
 
         foreach ($excluded as $table) {
-            // Ieškome lentelės pavadinimo SQL sakinyje - paprasta, bet
-            // pakankamai patikima praktikoje (lentelės vardas visada
-            // pasirodo INSERT INTO x / UPDATE x / DELETE FROM x pradžioje).
             if (stripos($sql, (string) $table) !== false) {
                 return true;
             }
@@ -93,15 +108,15 @@ class QueryAuditListener
      *
      * SVARBU: SQL lygmenyje parametrai yra tik pozicinis masyvas, be
      * stulpelių pavadinimų, tad tiksliai žinoti "šis parametras yra
-     * slaptažodis" NEĮMANOMA. Taikome euristiką: jei SQL sakinyje
-     * minimas jautrus stulpelis, užmaskuojame VISUS ilgus tekstinius
-     * parametrus, kurie atrodo kaip hash'as. Tai apsauga, ne garantija -
-     * jei jūsų projekte per DB::table() rašomi slaptažodžiai, geriau
-     * tokias lenteles įtraukti į exclude_query_tables.
+     * slaptažodis" NEĮMANOMA. Taikome euristiką. Jei jūsų projekte per
+     * DB::table() rašomi slaptažodžiai, geriau tokias lenteles įtraukti
+     * į exclude_query_tables.
      */
     protected function redactBindings(array $bindings): array
     {
-        return array_map(function ($value) {
+        $maxLength = (int) config('audit.max_binding_length', 500);
+
+        return array_map(function ($value) use ($maxLength) {
             if (!is_string($value)) {
                 return $value;
             }
@@ -111,10 +126,19 @@ class QueryAuditListener
                 return '[REDACTED]';
             }
 
-            // Labai ilgi tekstai (pvz. HTML turinys) - trumpiname, kad
-            // žurnalo įrašai neišaugtų iki megabaitų.
-            if (mb_strlen($value) > 500) {
-                return mb_substr($value, 0, 500).'... [TRUNCATED]';
+            // Base64 įterpti paveikslėliai - dažni WYSIWYG redaktoriuose,
+            // gali būti šimtų kilobaitų dydžio. Auditui pakanka fakto,
+            // kad paveikslėlis buvo įterptas.
+            if (stripos($value, 'data:image/') !== false) {
+                $value = preg_replace(
+                    '/data:image\/[a-z+]+;base64,[A-Za-z0-9+\/=]+/i',
+                    '[BASE64_IMAGE]',
+                    $value
+                );
+            }
+
+            if (mb_strlen($value) > $maxLength) {
+                return mb_substr($value, 0, $maxLength).'... [TRUNCATED]';
             }
 
             return $value;

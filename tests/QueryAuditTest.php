@@ -27,32 +27,34 @@ class QueryAuditTest extends TestCase
     }
 
     /** @test */
-    public function it_logs_db_table_updates_that_bypass_eloquent()
+    public function it_logs_db_table_updates_with_readable_column_value_pairs()
     {
         DB::table('test_widgets')->insert(['title' => 'Pradinis', 'sort' => 1]);
-
-        DB::table('test_widgets')->where('id', 1)->update(['title' => 'Pakeistas per query builder']);
+        DB::table('test_widgets')->where('id', 1)->update(['title' => 'Pakeistas']);
 
         $decoded = $this->lastLogEntry('audit');
 
         $this->assertSame('db_update', $decoded['context']['category']);
-        $this->assertStringContainsString('update', strtolower($decoded['context']['context']['sql']));
-        $this->assertContains('Pakeistas per query builder', $decoded['context']['context']['bindings']);
+        $this->assertSame('test_widgets', $decoded['context']['context']['table']);
+        // Svarbiausia - stulpelis surištas su reikšme, ne atskiras masyvas.
+        $this->assertSame('Pakeistas', $decoded['context']['new_values']['title']);
+        $this->assertSame(1, $decoded['context']['context']['conditions']['id']);
     }
 
     /** @test */
-    public function it_logs_db_table_inserts()
+    public function it_logs_inserts_with_column_value_pairs()
     {
         DB::table('test_widgets')->insert(['title' => 'Naujas įrašas', 'sort' => 5]);
 
         $decoded = $this->lastLogEntry('audit');
 
         $this->assertSame('db_insert', $decoded['context']['category']);
-        $this->assertContains('Naujas įrašas', $decoded['context']['context']['bindings']);
+        $this->assertSame('Naujas įrašas', $decoded['context']['new_values']['title']);
+        $this->assertSame(5, $decoded['context']['new_values']['sort']);
     }
 
     /** @test */
-    public function it_logs_db_table_deletes()
+    public function it_logs_deletes_with_conditions()
     {
         DB::table('test_widgets')->insert(['title' => 'Bus ištrintas', 'sort' => 1]);
         DB::table('test_widgets')->where('id', 1)->delete();
@@ -60,6 +62,30 @@ class QueryAuditTest extends TestCase
         $decoded = $this->lastLogEntry('audit');
 
         $this->assertSame('db_delete', $decoded['context']['category']);
+        $this->assertSame('test_widgets', $decoded['context']['context']['table']);
+        $this->assertSame(1, $decoded['context']['context']['conditions']['id']);
+    }
+
+    /** @test */
+    public function the_table_name_appears_in_the_message()
+    {
+        DB::table('test_widgets')->insert(['title' => 'Testas', 'sort' => 1]);
+
+        $decoded = $this->lastLogEntry('audit');
+
+        $this->assertStringContainsString('test_widgets', $decoded['message']);
+    }
+
+    /** @test */
+    public function raw_sql_is_omitted_when_parsing_succeeds()
+    {
+        DB::table('test_widgets')->insert(['title' => 'Testas', 'sort' => 1]);
+
+        $decoded = $this->lastLogEntry('audit');
+
+        // Kai stulpelius pavyko išanalizuoti, žalias SQL nebereikalingas -
+        // visa informacija jau new_values lauke.
+        $this->assertArrayNotHasKey('sql', $decoded['context']['context']);
     }
 
     /** @test */
@@ -99,7 +125,7 @@ class QueryAuditTest extends TestCase
     }
 
     /** @test */
-    public function it_redacts_password_hashes_in_bindings()
+    public function it_redacts_password_hashes()
     {
         DB::table('test_widgets')->insert([
             'title' => '$2y$10$abcdefghijklmnopqrstuvwxyz123456789',
@@ -108,11 +134,25 @@ class QueryAuditTest extends TestCase
 
         $decoded = $this->lastLogEntry('audit');
 
-        $this->assertContains('[REDACTED]', $decoded['context']['context']['bindings']);
+        $this->assertSame('[REDACTED]', $decoded['context']['new_values']['title']);
     }
 
     /** @test */
-    public function it_truncates_very_long_binding_values()
+    public function it_replaces_base64_images_with_a_placeholder()
+    {
+        $html = '<p>Tekstas</p><img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUg'
+            .str_repeat('AAAA', 50).'=" /><p>Pabaiga</p>';
+
+        DB::table('test_widgets')->insert(['title' => $html, 'sort' => 1]);
+
+        $decoded = $this->lastLogEntry('audit');
+
+        $this->assertStringContainsString('[BASE64_IMAGE]', $decoded['context']['new_values']['title']);
+        $this->assertStringNotContainsString('iVBORw0KGgo', $decoded['context']['new_values']['title']);
+    }
+
+    /** @test */
+    public function it_truncates_very_long_values()
     {
         DB::table('test_widgets')->insert([
             'title' => str_repeat('a', 800),
@@ -121,13 +161,6 @@ class QueryAuditTest extends TestCase
 
         $decoded = $this->lastLogEntry('audit');
 
-        $found = false;
-        foreach ($decoded['context']['context']['bindings'] as $binding) {
-            if (is_string($binding) && strpos($binding, '[TRUNCATED]') !== false) {
-                $found = true;
-            }
-        }
-
-        $this->assertTrue($found, 'Ilgos reikšmės turi būti trumpinamos');
+        $this->assertStringContainsString('[TRUNCATED]', $decoded['context']['new_values']['title']);
     }
 }
