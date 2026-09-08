@@ -41,6 +41,13 @@ class InstallCommand extends Command
                 'AUDIT_LOG_PREVENT_DOWNLOAD_CACHING' => ['true', 'Neleisti narsyklei talpinti atsisiuntimu'],
                 'AUDIT_LOG_DOWNLOAD_DEDUP_SECONDS' => ['10', 'Sujungti pasikartojancius atsisiuntimus'],
                 'AUDIT_LOG_PAGE_VIEWS' => ['off', 'Puslapiu perziuros: off | whitelist | all'],
+                'AUDIT_LOG_POST_VIEWS' => ['whitelist', 'POST kaip perziura: off | whitelist | auto'],
+            ],
+
+            'El. pastas' => [
+                'AUDIT_LOG_MAIL' => ['true', 'Fiksuoti issiustus el. laiskus'],
+                'AUDIT_LOG_MAIL_MAX_RECIPIENTS' => ['0', 'Gaveju sarasas zurnale (0 = visi)'],
+                'AUDIT_LOG_MAIL_MAX_INDIVIDUAL' => ['20', 'Kiek laisku fiksuoti atskirai, toliau - suvestine'],
             ],
 
             'Klientines puses ivykiai' => [

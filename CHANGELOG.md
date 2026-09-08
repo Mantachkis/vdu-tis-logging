@@ -3,6 +3,70 @@
 Visi svarbūs paketo pakeitimai fiksuojami šiame faile.
 Versijavimas pagal [Semantic Versioning](https://semver.org/): MAJOR.MINOR.PATCH.
 
+## [2.9.0] - 2026-09-08
+
+### Pridėta
+- **Masinių laiškų suvestinė.** Naujienlaiškiai dažnai siunčiami cikle, kur
+  kiekvienas gavėjas yra atskiras `MessageSent` event'as - 500 gavėjų duotų
+  500 beveik identiškų žurnalo įrašų. Dabar pirmi
+  `AUDIT_LOG_MAIL_MAX_INDIVIDUAL` (numatytoji 20) laiškų fiksuojami atskirai,
+  o viskas virš ribos sukaupiama ir užklausos pabaigoje įrašoma VIENA
+  suvestine su likusių gavėjų sąrašu.
+- Suvestinės įrašas pažymimas `"summary": true`, kad skaitytojas neklaidingai
+  suprastų `recipients_total` reikšmės.
+- Suvestinės grupuojamos pagal temą - skirtingi laiškai vienoje užklausoje
+  gauna atskiras suvestines.
+- `MailBatchTracker` naudoja `register_shutdown_function()`, tad veikia ir CLI
+  kontekste (artisan komandos, queue darbuotojai), kur HTTP middleware nėra.
+- `AUDIT_LOG_MAIL_MAX_INDIVIDUAL=0` - be ribos, kiekvienas laiškas atskiru įrašu.
+- 4 nauji testai.
+
+## [2.8.0] - 2026-09-08
+
+### Pridėta
+- **El. laiškų fiksavimas (`mail_sent`).** Automatiškai per Laravel
+  `MessageSent` event'ą, be kontrolerių redagavimo. Laiško išsiuntimas
+  nekeičia DB, tad modelio ir SQL mechanizmai jo nepamatydavo, nors tai
+  reikšmingas veiksmas su asmens duomenimis (naujienlaiškiai, priminimai,
+  vertinimo pranešimai). Fiksuojama tema, visi gavėjai (`to`/`cc`/`bcc`)
+  ir bendras skaičius.
+- Palaikomi abu Laravel varianai: SwiftMailer (5.7-8.x) ir Symfony Mailer (9.x).
+- `AUDIT_LOG_MAIL_MAX_RECIPIENTS` - riba gavėjų sąrašui (0 = visi). BDAR
+  požiūriu naudinga, kai siunčiama tūkstančiams gavėjų.
+- **`post_mode=auto` - POST-peržiūros be rankinio sąrašo.** POST fiksuojamas
+  kaip peržiūra TIK jei per užklausą nebuvo užfiksuota jokio reikšmingo
+  veiksmo (duomenų pakeitimo ar laiško išsiuntimo). Tai automatiškai
+  atskiria POST-peržiūras (formos su filtrais) nuo POST-veiksmų
+  (išsaugojimai), nereikalaujant vardinti maršrutų.
+- `EventLogger::hasRecordedActions()` - skaičiuoja reikšmingus veiksmus per
+  užklausą; naudoja `auto` režimas.
+- 8 nauji testai.
+
+### `auto` režimo niuansas
+- Jei tas pats maršrutas kartais keičia duomenis, o kartais ne, jis kartais
+  atsiras kaip `update`, kartais kaip `view`. Tai teisingai atspindi, kas
+  realiai įvyko, bet žurnalo skaitytojui gali pasirodyti nenuoseklu.
+- `post_routes` veikia ir `auto` režime - leidžia sąmoningai perrašyti
+  automatinį sprendimą konkretiems maršrutams.
+
+## [2.7.0] - 2026-09-08
+
+### Pridėta
+- **`post_routes` - POST-peržiūrų fiksavimas.** Pastebėta realiame diegime:
+  `/user/personal_studies` yra POST maršrutas, kuris tik PARODO duomenis su
+  filtrais, bet `LogPageViews` jo nefiksavo, nes POST pagal nutylėjimą
+  laikomas duomenų keitimu (kad išsaugojimai nedubliuotųsi su modelio
+  mechanizmo `update` įrašais). Dabar tokius maršrutus galima išvardinti
+  atskirai.
+- **`json_routes` - JSON/AJAX peržiūrų fiksavimas.** Dauguma JSON atsakymų
+  techniniai, bet kai kurie atiduoda asmens duomenis (server-side DataTables,
+  autocomplete su vartotojų sąrašais) - tokius galima nurodyti atskirai.
+- Abu sąrašai veikia visuose režimuose - `whitelist` režimu jų nereikia
+  dubliuoti `routes` sąraše.
+- `exclude` sąrašas turi pirmenybę prieš visus baltuosius sąrašus.
+- Įrašo `context` papildytas `method` lauku (matoma, ar peržiūra buvo GET ar POST).
+- 6 nauji testai.
+
 ## [2.6.0] - 2026-09-08
 
 ### Pridėta

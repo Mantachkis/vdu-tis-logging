@@ -36,11 +36,32 @@ class EventLogger
      */
     const ERROR_CHANNEL_TYPES = [self::TYPE_WARNING, self::TYPE_ERROR];
 
+    /**
+     * Kategorijos, kurios laikomos REIKŠMINGU veiksmu (ne peržiūra).
+     *
+     * Naudojama LogPageViews 'auto' režime: jei per užklausą buvo
+     * užfiksuota bent viena šių kategorijų, POST užklausa NEBUS papildomai
+     * fiksuojama kaip peržiūra - nes tai buvo veiksmas, ne peržiūra.
+     */
+    const ACTION_CATEGORIES = [
+        'create', 'update', 'delete',
+        'db_insert', 'db_update', 'db_delete',
+        'mail_sent',
+    ];
+
     /** @var Logger */
     protected $auditLogger;
 
     /** @var Logger */
     protected $errorLogger;
+
+    /**
+     * Kiek reikšmingų veiksmų užfiksuota per šią užklausą.
+     * EventLogger yra singleton, tad skaitiklis gyvuoja visą request'ą.
+     *
+     * @var int
+     */
+    protected $recordedActions = 0;
 
     public function __construct()
     {
@@ -101,6 +122,23 @@ class EventLogger
         ];
 
         $this->resolveLogger($eventType)->log($this->mapLevel($eventType), $description, $context);
+
+        if (in_array($category, self::ACTION_CATEGORIES, true)) {
+            $this->recordedActions++;
+        }
+    }
+
+    /**
+     * Ar per šią užklausą buvo užfiksuotas bent vienas reikšmingas veiksmas
+     * (duomenų pakeitimas ar laiško išsiuntimas).
+     *
+     * Naudoja LogPageViews 'auto' režimas, kad atskirtų POST-peržiūras
+     * (formos su filtrais) nuo POST-veiksmų (išsaugojimai) - be jokio
+     * rankinio maršrutų sąrašo.
+     */
+    public function hasRecordedActions(): bool
+    {
+        return $this->recordedActions > 0;
     }
 
     /**

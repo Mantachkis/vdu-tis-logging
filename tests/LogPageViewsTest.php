@@ -153,4 +153,100 @@ class LogPageViewsTest extends TestCase
 
         $this->assertNull($this->findLogFile('audit'));
     }
+
+    /** @test */
+    public function post_routes_whitelist_allows_post_views()
+    {
+        // /user/personal_studies yra POST, bet tik PARODO duomenis su
+        // filtrais - realus perziuros veiksmas.
+        config([
+            'audit.log_page_views.mode' => 'all',
+            'audit.log_page_views.post_routes' => ['user/personal_studies'],
+        ]);
+
+        $this->pass($this->middleware(), Request::create('/user/personal_studies', 'POST'));
+
+        $decoded = $this->lastLogEntry('audit');
+
+        $this->assertSame('view', $decoded['context']['category']);
+        $this->assertStringContainsString('user/personal_studies', $decoded['message']);
+        $this->assertSame('POST', $decoded['context']['context']['method']);
+    }
+
+    /** @test */
+    public function post_routes_are_logged_even_in_whitelist_mode_without_duplicating_in_routes()
+    {
+        config([
+            'audit.log_page_views.mode' => 'whitelist',
+            'audit.log_page_views.routes' => [],
+            'audit.log_page_views.post_routes' => ['user/personal_studies'],
+        ]);
+
+        $this->pass($this->middleware(), Request::create('/user/personal_studies', 'POST'));
+
+        $decoded = $this->lastLogEntry('audit');
+
+        $this->assertStringContainsString('user/personal_studies', $decoded['message']);
+    }
+
+    /** @test */
+    public function posts_outside_the_post_routes_list_are_still_ignored()
+    {
+        config([
+            'audit.log_page_views.mode' => 'all',
+            'audit.log_page_views.post_routes' => ['user/personal_studies'],
+        ]);
+
+        $this->pass($this->middleware(), Request::create('/admin/update_news', 'POST'));
+
+        $this->assertNull($this->findLogFile('audit'));
+    }
+
+    /** @test */
+    public function json_routes_whitelist_allows_json_views()
+    {
+        config([
+            'audit.log_page_views.mode' => 'all',
+            'audit.log_page_views.json_routes' => ['admin/userInfoList/data'],
+        ]);
+
+        $response = new Response('{"data":[]}');
+        $response->headers->set('Content-Type', 'application/json');
+
+        $this->pass($this->middleware(), Request::create('/admin/userInfoList/data', 'GET'), $response);
+
+        $decoded = $this->lastLogEntry('audit');
+
+        $this->assertStringContainsString('admin/userInfoList/data', $decoded['message']);
+    }
+
+    /** @test */
+    public function json_outside_the_json_routes_list_is_still_ignored()
+    {
+        config([
+            'audit.log_page_views.mode' => 'all',
+            'audit.log_page_views.json_routes' => ['admin/userInfoList/data'],
+        ]);
+
+        $response = new Response('{"ok":true}');
+        $response->headers->set('Content-Type', 'application/json');
+
+        $this->pass($this->middleware(), Request::create('/ai-chat/status', 'GET'), $response);
+
+        $this->assertNull($this->findLogFile('audit'));
+    }
+
+    /** @test */
+    public function excluded_routes_win_over_post_and_json_whitelists()
+    {
+        config([
+            'audit.log_page_views.mode' => 'all',
+            'audit.log_page_views.exclude' => ['user/*'],
+            'audit.log_page_views.post_routes' => ['user/personal_studies'],
+        ]);
+
+        $this->pass($this->middleware(), Request::create('/user/personal_studies', 'POST'));
+
+        $this->assertNull($this->findLogFile('audit'));
+    }
 }

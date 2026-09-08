@@ -17,6 +17,7 @@ use Vdu\TisLogging\Http\Middleware\LogPageViews;
 use Vdu\TisLogging\Listeners\GlobalModelAuditListener;
 use Vdu\TisLogging\Listeners\LogFailedLogin;
 use Vdu\TisLogging\Listeners\LogLogout;
+use Vdu\TisLogging\Listeners\LogSentMail;
 use Vdu\TisLogging\Listeners\LogSuccessfulLogin;
 use Vdu\TisLogging\Listeners\QueryAuditListener;
 use Vdu\TisLogging\Support\OldValuesSnapshotStore;
@@ -45,6 +46,13 @@ class AuditLogServiceProvider extends ServiceProvider
         Event::listen(Login::class, LogSuccessfulLogin::class);
         Event::listen(Logout::class, LogLogout::class);
         Event::listen(Failed::class, LogFailedLogin::class);
+
+        // Išsiųsti el. laiškai - reikšmingas veiksmas su asmens duomenimis,
+        // kurio modelio/SQL mechanizmai nepamato (DB nekeičiamas).
+        // MessageSent egzistuoja nuo Laravel 5.x, bet tikriname apsaugai.
+        if (class_exists(\Illuminate\Mail\Events\MessageSent::class)) {
+            Event::listen(\Illuminate\Mail\Events\MessageSent::class, LogSentMail::class.'@handle');
+        }
 
         // Globalus visų Eloquent modelių audito fiksavimas - veikia
         // NEPRIKLAUSOMAI nuo console/web konteksto, nes modelio pokyčiai
@@ -128,6 +136,10 @@ class AuditLogServiceProvider extends ServiceProvider
         // ir paimami "QueryExecuted" metu, tad tai turi būti TAS PATS
         // objektas, ne du atskiri egzemplioriai.
         $this->app->singleton(OldValuesSnapshotStore::class);
+
+        // BŪTINA singleton - seka laiškų kiekį per VISĄ užklausą, kad
+        // pasiekus ribą būtų suformuota viena suvestinė.
+        $this->app->singleton(\Vdu\TisLogging\Support\MailBatchTracker::class);
 
         $this->app->alias(\Vdu\TisLogging\EventLogger::class, 'audit-log');
     }

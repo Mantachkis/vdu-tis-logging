@@ -445,11 +445,123 @@ Vienas administratorius per dieną gali sugeneruoti tūkstančius įrašų. Dėl
 
 Naudokite tik jei reglamentas aiškiai to reikalauja.
 
+### POST-peržiūros ir AJAX
+
+Kai kurios sistemos naudoja `POST` ne duomenų keitimui, o **peržiūrai su
+filtrais**. Pagal nutylėjimą `POST` nefiksuojamas kaip peržiūra - kitaip
+kiekvienas formos išsaugojimas atsirastų žurnale du kartus (kaip `update` iš
+modelio mechanizmo ir kaip `view`). Tokius maršrutus nurodykite atskirai:
+
+```php
+'post_routes' => [
+    'user/personal_studies',   // POST, bet tik parodo duomenis
+],
+```
+
+Analogiškai su JSON/AJAX - dauguma jų techniniai, bet kai kurie atiduoda
+asmens duomenis (server-side DataTables, autocomplete su vartotojų sąrašais):
+
+```php
+'json_routes' => [
+    'admin/userInfoList/data',
+],
+```
+
+Abu sąrašai veikia **visuose režimuose** - `whitelist` režimu jų nereikia
+dubliuoti pagrindiniame `routes` sąraše.
+
+**Atsargiai:** į `post_routes` netraukite maršrutų, kurie realiai keičia
+duomenis - gausite dubliuotus įrašus.
+
+### `auto` režimas - be jokių sąrašų
+
+Jei nenorite rankiniu būdu vardinti POST maršrutų:
+
+```
+AUDIT_LOG_POST_VIEWS=auto
+```
+
+Tada POST fiksuojamas kaip peržiūra **tik jei** per tą užklausą nebuvo
+užfiksuota jokio reikšmingo veiksmo (duomenų pakeitimo ar laiško
+išsiuntimo). Middleware veikia po kontrolerio, tad iki to momento visi
+pakeitimai jau užfiksuoti - sprendimas patikimas.
+
+**Niuansas:** jei tas pats maršrutas kartais keičia duomenis, o kartais ne,
+jis kartais atsiras kaip `update`, kartais kaip `view`. Tai teisingai
+atspindi, kas realiai įvyko, bet žurnalo skaitytojui gali pasirodyti
+nenuoseklu.
+
+`post_routes` sąrašas veikia ir `auto` režime - jei norite maršrutą fiksuoti
+kaip peržiūrą **visada**, nepaisant automatinio sprendimo.
+
+## El. laiškai
+
+Fiksuojama **automatiškai**, be kontrolerių redagavimo - per Laravel
+`MessageSent` event'ą. Laiško išsiuntimas nekeičia DB, tad modelio ir SQL
+mechanizmai jo nepamato, nors tai reikšmingas veiksmas su asmens duomenimis.
+
+Kategorija: `mail_sent`. Fiksuojama tema, visi gavėjai (`to`, `cc`, `bcc`)
+ir bendras jų skaičius.
+
+```
+AUDIT_LOG_MAIL=true                 # numatytoji
+AUDIT_LOG_MAIL_MAX_RECIPIENTS=0     # 0 = visi adresai
+```
+
+**BDAR pastaba:** gavėjų el. paštai yra asmens duomenys. Jei naujienlaiškiai
+siunčiami tūkstančiams gavėjų, apsvarstykite `max_recipients` ribą - kitaip
+vienas žurnalo įrašas gali turėti labai daug asmens duomenų. Nustačius, pvz.,
+`50`, bus fiksuojami pirmi 50 adresų, o likusieji pakeisti į „... ir dar N".
+
+### Masiniai siuntimai cikle
+
+Naujienlaiškiai dažnai siunčiami taip:
+
+```php
+foreach ($subscribers as $subscriber) {
+    Mail::to($subscriber->email)->send(new Newsletter($content));
+}
+```
+
+Kiekvienas siuntimas yra **atskiras** `MessageSent` event'as, tad 500 gavėjų
+duotų 500 beveik identiškų žurnalo įrašų. Todėl veikia riba:
+
+```
+AUDIT_LOG_MAIL_MAX_INDIVIDUAL=20    # numatytoji; 0 = be ribos
+```
+
+Pirmi 20 laiškų fiksuojami **atskirai** (išsaugoma detali informacija apie
+tipinius atvejus), o viskas virš ribos sukaupiama ir užklausos pabaigoje
+įrašoma **viena suvestine** su likusių gavėjų sąrašu:
+
+```json
+{
+  "message": "Išsiųsta laiškų suvestinė (482 laiškų): Naujienlaiškis",
+  "context": {
+    "category": "mail_sent",
+    "context": {
+      "subject": "Naujienlaiškis",
+      "to": ["a@vdu.lt", "b@vdu.lt", "..."],
+      "recipients_total": 482,
+      "summary": true
+    }
+  }
+}
+```
+
+Suvestinės grupuojamos **pagal temą** - jei per vieną užklausą siunčiami
+skirtingi laiškai, gausite atskirą suvestinę kiekvienai temai.
+
+Suvestinė rašoma per `register_shutdown_function()`, tad veikia ir CLI
+kontekste (artisan komandos, queue darbuotojai), kur jokio HTTP middleware
+nėra.
+
 ### Kas nefiksuojama visais režimais
 
-`POST`/`PUT`/`DELETE` (juos padengia modelio ir SQL mechanizmai), atsisiuntimai
-(juos padengia `LogFileDownloads`), JSON/AJAX atsakymai, klaidų puslapiai (ne
-2xx), ir maršrutai iš `exclude` sąrašo.
+`POST`/`PUT`/`DELETE` (nebent išvardinti `post_routes`), atsisiuntimai (juos
+padengia `LogFileDownloads`), JSON atsakymai (nebent išvardinti `json_routes`),
+klaidų puslapiai (ne 2xx), ir maršrutai iš `exclude` sąrašo. `exclude` turi
+pirmenybę prieš visus baltuosius sąrašus.
 
 ## Peržiūra - `LogsViews` trait
 

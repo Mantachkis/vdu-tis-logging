@@ -204,6 +204,46 @@ return [
 
     /*
     |--------------------------------------------------------------------
+    | Išsiųsti el. laiškai
+    |--------------------------------------------------------------------
+    |
+    | Laiško išsiuntimas (ypač naujienlaiškio šimtams gavėjų) yra
+    | reikšmingas veiksmas su asmens duomenimis, bet DB nekeičia, tad
+    | modelio/SQL mechanizmai jo nepamato. Fiksuojama automatiškai per
+    | Laravel MessageSent event'ą, be kontrolerių redagavimo.
+    |
+    | BDAR pastaba: gavėjų el. paštai yra asmens duomenys. Pagal
+    | nutylėjimą fiksuojami VISI adresai. Jei naujienlaiškiai siunčiami
+    | tūkstančiams gavėjų, apsvarstykite max_recipients ribą - kitaip
+    | vienas žurnalo įrašas gali turėti labai daug asmens duomenų.
+    |
+    */
+    'mail' => [
+        'enabled' => env('AUDIT_LOG_MAIL', true),
+
+        // 0 = fiksuoti visus adresus. Didesnis nei 0 - fiksuoti tik tiek
+        // adresų, o likusius pakeisti į "... ir dar N".
+        'max_recipients' => env('AUDIT_LOG_MAIL_MAX_RECIPIENTS', 0),
+
+        /*
+        | Kiek laiškų fiksuoti ATSKIRAIS įrašais per vieną užklausą.
+        |
+        | Naujienlaiškiai dažnai siunčiami cikle, kur kiekvienas gavėjas
+        | yra atskiras laiškas - 500 gavėjų duotų 500 beveik identiškų
+        | žurnalo įrašų.
+        |
+        | Pirmi N fiksuojami atskirai (išsaugoma detali informacija), o
+        | viskas virš ribos sukaupiama ir užklausos pabaigoje įrašoma
+        | VIENA suvestine su likusių gavėjų sąrašu. Suvestinės įrašas
+        | pažymimas "summary": true.
+        |
+        | 0 = be ribos, kiekvienas laiškas atskiru įrašu.
+        */
+        'max_individual_per_request' => env('AUDIT_LOG_MAIL_MAX_INDIVIDUAL', 20),
+    ],
+
+    /*
+    |--------------------------------------------------------------------
     | Klientinės pusės (naršyklės) įvykiai
     |--------------------------------------------------------------------
     |
@@ -213,13 +253,9 @@ return [
     | nesužino, tad vienintelis būdas užfiksuoti - kad pati naršyklė
     | praneštų per šį endpoint'ą.
     |
-    | Įjungus, registruojamas POST maršrutas, į kurį JS gali siųsti
-    | pranešimą (žr. README pavyzdį).
-    |
     | SVARBU: klientinės pusės pranešimai NĖRA tokie patys patikimi kaip
     | serverio užfiksuoti įvykiai - vartotojas techniškai gali jų
-    | neišsiųsti. Tokie įrašai žymimi "source": "client", kad auditą
-    | peržiūrintis asmuo matytų skirtumą.
+    | neišsiųsti. Tokie įrašai žymimi "source": "client".
     |
     */
     'client_events' => [
@@ -298,6 +334,23 @@ return [
     'log_page_views' => [
         'mode' => env('AUDIT_LOG_PAGE_VIEWS', 'off'),
 
+        /*
+        | POST užklausų elgsena:
+        |
+        |   'off'       - POST niekada nefiksuojamas kaip peržiūra.
+        |   'whitelist' - tik "post_routes" sąraše išvardinti (NUMATYTOJI).
+        |   'auto'      - fiksuojamas, JEI per užklausą nebuvo užfiksuota
+        |                 jokio reikšmingo veiksmo (duomenų pakeitimo ar
+        |                 laiško išsiuntimo). Automatiškai atskiria
+        |                 POST-peržiūras nuo POST-veiksmų, be rankinio sąrašo.
+        |
+        | 'auto' režimo niuansas: jei tas pats maršrutas kartais keičia
+        | duomenis, o kartais ne, jis kartais atsiras kaip "update",
+        | kartais kaip "view". Tai teisingai atspindi, kas realiai įvyko,
+        | bet žurnalo skaitytojui gali pasirodyti nenuoseklu.
+        */
+        'post_mode' => env('AUDIT_LOG_POST_VIEWS', 'whitelist'),
+
         // Naudojama TIK 'whitelist' režimu. Palaiko "*" šablonus.
         // Route parametrai (pvz. {id}) automatiškai įrašomi kaip
         // subject_id - t.y. matysite, KIENO duomenys peržiūrėti.
@@ -314,6 +367,40 @@ return [
             'audit/*',
             '_debugbar/*',
             'captcha/*',
+        ],
+
+        /*
+        | POST-peržiūros
+        |
+        | Kai kurios sistemos naudoja POST ne duomenų keitimui, o peržiūrai
+        | su filtrais (pvz. /user/personal_studies). Pagal nutylėjimą POST
+        | NEfiksuojamas kaip peržiūra - kitaip kiekvienas formos išsaugojimas
+        | atsirastų žurnale DU kartus (kaip "update" iš modelio mechanizmo
+        | ir kaip "view").
+        |
+        | Čia išvardinkite maršrutus, kurie POST metodu tik PARODO duomenis.
+        | Veikia kaip baltasis sąrašas visuose režimuose - 'whitelist'
+        | režimu jų nereikia dubliuoti "routes" sąraše.
+        |
+        | SVARBU: netraukite čia maršrutų, kurie realiai keičia duomenis -
+        | gausite dubliuotus įrašus.
+        */
+        'post_routes' => [
+            // 'user/personal_studies',
+        ],
+
+        /*
+        | JSON/AJAX peržiūros
+        |
+        | Dauguma JSON atsakymų yra techniniai (statuso tikrinimai, kalbos
+        | failai), tad pagal nutylėjimą jie NEfiksuojami. Bet kai kurie
+        | atiduoda asmens duomenis - server-side DataTables, autocomplete
+        | su vartotojų sąrašais - tokie yra reali duomenų peržiūra.
+        |
+        | Čia išvardinkite tokius endpoint'us.
+        */
+        'json_routes' => [
+            // 'admin/userInfoList/data',
         ],
     ],
 

@@ -55,17 +55,23 @@ class LogPageViews
             return;
         }
 
-        if (!$this->isViewableResponse($request, $response)) {
-            return;
-        }
-
         $path = trim($request->path(), '/');
 
         if ($this->isExcluded($path)) {
             return;
         }
 
-        if ($mode === 'whitelist' && !$this->matchesWhitelist($path)) {
+        if (!$this->isViewableResponse($request, $response, $path)) {
+            return;
+        }
+
+        // "post_routes" ir "json_routes" veikia kaip baltieji sąrašai VISUOSE
+        // režimuose - t.y. net 'whitelist' režimu jų nereikia dubliuoti
+        // pagrindiniame "routes" sąraše.
+        $explicitlyListed = $this->matchesAny($path, config('audit.log_page_views.post_routes', []))
+            || $this->matchesAny($path, config('audit.log_page_views.json_routes', []));
+
+        if ($mode === 'whitelist' && !$explicitlyListed && !$this->matchesWhitelist($path)) {
             return;
         }
 
@@ -80,6 +86,7 @@ class LogPageViews
                 'subject_id' => $this->resolveSubjectId($route),
                 'context' => [
                     'url' => $request->fullUrl(),
+                    'method' => $request->method(),
                     'route_name' => $route ? $route->getName() : null,
                     'route_params' => $route ? $this->scalarParams($route) : [],
                 ],
@@ -87,13 +94,9 @@ class LogPageViews
         );
     }
 
-    protected function isViewableResponse($request, $response): bool
+    protected function isViewableResponse($request, $response, string $path): bool
     {
         if (!$response instanceof Response) {
-            return false;
-        }
-
-        if (!$request->isMethod('GET') && !$request->isMethod('HEAD')) {
             return false;
         }
 
@@ -106,11 +109,72 @@ class LogPageViews
             return false;
         }
 
+        if (!$this->isAllowedMethod($request, $path)) {
+            return false;
+        }
+
+        return $this->isAllowedContentType($response, $path);
+    }
+
+    /**
+     * GET/HEAD leidžiami visada. POST/PUT/PATCH elgsena priklauso nuo
+     * config('audit.log_page_views.post_mode'):
+     *
+     *   'off'       - POST niekada nefiksuojamas kaip peržiūra.
+     *   'whitelist' - tik "post_routes" sąraše išvardinti (NUMATYTOJI).
+     *   'auto'      - fiksuojamas, JEI per užklausą nebuvo užfiksuota jokio
+     *                 reikšmingo veiksmo (duomenų pakeitimo ar laiško
+     *                 išsiuntimo). Tai automatiškai atskiria POST-peržiūras
+     *                 (formos su filtrais) nuo POST-veiksmų (išsaugojimai),
+     *                 be jokio rankinio sąrašo.
+     *
+     * KAM TO REIKIA: kai kurios sistemos naudoja POST ne duomenų keitimui,
+     * o peržiūrai su filtrais (pvz. /user/personal_studies). Bet aklai
+     * fiksuoti visus POST reikštų, kad kiekvienas išsaugojimas atsirastų
+     * žurnale DU kartus - kaip "update" ir kaip "view".
+     */
+    protected function isAllowedMethod($request, string $path): bool
+    {
+        if ($request->isMethod('GET') || $request->isMethod('HEAD')) {
+            return true;
+        }
+
+        // Eksplicitiškai išvardinti maršrutai fiksuojami visais režimais.
+        if ($this->matchesAny($path, config('audit.log_page_views.post_routes', []))) {
+            return true;
+        }
+
+        if (config('audit.log_page_views.post_mode', 'whitelist') !== 'auto') {
+            return false;
+        }
+
+        // Middleware veikia PO kontrolerio, tad iki šio momento visi
+        // duomenų pakeitimai jau užfiksuoti - galime patikimai spręsti.
+        return !app(EventLogger::class)->hasRecordedActions();
+    }
+
+    /**
+     * HTML leidžiamas visada. JSON - tik jei maršrutas eksplicitiškai
+     * išvardintas "json_routes" sąraše.
+     *
+     * KAM TO REIKIA: dauguma JSON/AJAX atsakymų yra techniniai (statuso
+     * tikrinimai, kalbos failai), bet kai kurie atiduoda asmens duomenis
+     * (server-side DataTables, autocomplete su vartotojų sąrašais) - tokie
+     * yra reali duomenų peržiūra.
+     */
+    protected function isAllowedContentType($response, string $path): bool
+    {
         $contentType = (string) $response->headers->get('Content-Type');
 
-        // Tik HTML puslapiai. JSON/AJAX atsakymai paprastai techniniai,
-        // o ne "vartotojas peržiūrėjo duomenis".
-        return $contentType === '' || Str::contains($contentType, 'text/html');
+        if ($contentType === '' || Str::contains($contentType, 'text/html')) {
+            return true;
+        }
+
+        if (Str::contains($contentType, 'json')) {
+            return $this->matchesAny($path, config('audit.log_page_views.json_routes', []));
+        }
+
+        return false;
     }
 
     protected function matchesWhitelist(string $path): bool
