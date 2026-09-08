@@ -3,6 +3,27 @@
 Visi svarbūs paketo pakeitimai fiksuojami šiame faile.
 Versijavimas pagal [Semantic Versioning](https://semver.org/): MAJOR.MINOR.PATCH.
 
+## [2.4.0] - 2026-09-08
+
+### Pridėta
+- **Klientinės pusės įvykių endpoint'as.** Kai kurie veiksmai vyksta vien
+  naršyklėje ir nesukelia jokios HTTP užklausos - pvz. Excel eksportas per
+  SheetJS (`XLSX.writeFile`), `window.print()`, kopijavimas į iškarpinę.
+  Failas suformuojamas iš jau įkelto DOM turinio ir išsaugomas tiesiai į
+  vartotojo diską, tad JOKIA serverio pusės priemonė to pagauti negali.
+  Pastebėta realiame pilotiniame diegime.
+- Įjungus `AUDIT_LOG_CLIENT_EVENTS=true`, registruojamas POST maršrutas
+  (numatytoji reikšmė `/audit/client-event`), į kurį JS gali pranešti apie
+  tokį veiksmą vienu `fetch` kvietimu (pavyzdys README).
+- Apsaugos nuo piktnaudžiavimo: kategorijų baltasis sąrašas, aprašymo ilgio
+  ir konteksto raktų kiekio ribos, ne skaliarinių reikšmių atmetimas,
+  `throttle:60,1`.
+- Kiekvienas toks įrašas žymimas `"source": "client"` - klientinės pusės
+  pranešimai nėra tokie patys patikimi kaip serverio užfiksuoti įvykiai
+  (vartotojas techniškai gali jų neišsiųsti), tad auditą peržiūrintis asmuo
+  turi matyti skirtumą.
+- 7 nauji testai.
+
 ## [2.3.0] - 2026-09-07
 
 ### Pridėta

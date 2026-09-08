@@ -350,6 +350,63 @@ Aukšto dažnio techninės lentelės praleidžiamos per `config/audit.php`:
 naudoti modelio instancijas, arba nuolat, jei pilnas SQL lygmens
 padengimas svarbesnis už žurnalų glaustumą ir `old_values` tikslumą.
 
+## Klientinės pusės veiksmai (SheetJS, print, iškarpinė)
+
+Kai kurie veiksmai vyksta **vien naršyklėje** ir nesukelia jokios HTTP
+užklausos - serveris apie juos fiziškai nieko nesužino:
+
+```js
+XLSX.writeFile(workbook, 'reports.xlsx');   // SheetJS - failas iš DOM
+window.print();
+navigator.clipboard.writeText(...);
+```
+
+Toks Excel eksportas suformuojamas iš jau įkelto puslapio turinio ir
+išsaugomas tiesiai į vartotojo diską. **Jokia serverio pusės priemonė to
+pagauti negali** - vienintelis būdas yra, kad pati naršyklė praneštų.
+
+Įjunkite endpoint'ą:
+```
+AUDIT_LOG_CLIENT_EVENTS=true
+```
+
+Tada JS kode pridėkite vieną `fetch` kvietimą prieš eksportą:
+
+```js
+document.getElementById('exportExcel').addEventListener('click', async function () {
+    const table = document.getElementById('sortTable');
+    table.querySelectorAll('button').forEach(btn => btn.remove());
+
+    // Pranešame serveriui PRIEŠ eksportą
+    await fetch('/audit/client-event', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content,
+        },
+        body: JSON.stringify({
+            category: 'export',
+            description: 'Excel eksportas: reports.xlsx',
+            context: { filename: 'reports.xlsx', rows: table.rows.length },
+        }),
+    }).catch(() => {});   // eksportas turi įvykti net jei pranešimas nepavyko
+
+    const workbook = XLSX.utils.table_to_book(table, {sheet: "Sheet1"});
+    XLSX.writeFile(workbook, 'reports.xlsx');
+});
+```
+
+**Patikimumo pastaba:** klientinės pusės pranešimai nėra tokie patys
+patikimi kaip serverio užfiksuoti įvykiai - technikai išmanantis vartotojas
+gali jų neišsiųsti arba suklastoti. Todėl kiekvienas toks įrašas žymimas
+`"source": "client"`, kad auditą peržiūrintis asmuo matytų skirtumą.
+Serverio pusėje užfiksuoti įvykiai lieka autoritetingas šaltinis.
+
+**Apsaugos:** kategorijos ribojamos baltuoju sąrašu
+(`allowed_categories` - pagal nutylėjimą `export`, `print`, `view`, `copy`),
+aprašymo ilgis ir konteksto raktų kiekis apriboti, taikomas
+`throttle:60,1` - kad klientas negalėtų užtvindyti žurnalo.
+
 ## Peržiūra - `LogsViews` trait
 
 Eloquent neturi "peržiūrėjimo" įvykio, tad šis kvietimas visada bus rankinis:

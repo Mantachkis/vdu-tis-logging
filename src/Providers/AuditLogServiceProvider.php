@@ -35,6 +35,12 @@ class AuditLogServiceProvider extends ServiceProvider
 
         $this->loadMigrationsFrom(__DIR__.'/../../database/migrations');
 
+        // Klientinės pusės įvykių endpoint'as - registruojamas tik jei
+        // eksplicitiškai įjungtas, nes tai viešai pasiekiamas maršrutas.
+        if (config('audit.client_events.enabled', false)) {
+            $this->loadRoutesFrom(__DIR__.'/../../routes/client-events.php');
+        }
+
         Event::listen(Login::class, LogSuccessfulLogin::class);
         Event::listen(Logout::class, LogLogout::class);
         Event::listen(Failed::class, LogFailedLogin::class);

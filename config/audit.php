@@ -204,6 +204,43 @@ return [
 
     /*
     |--------------------------------------------------------------------
+    | Klientinės pusės (naršyklės) įvykiai
+    |--------------------------------------------------------------------
+    |
+    | Kai kurie veiksmai vyksta VIEN naršyklėje ir nesukelia jokios HTTP
+    | užklausos - pvz. Excel eksportas per SheetJS (XLSX.writeFile),
+    | window.print(), kopijavimas į iškarpinę. Serveris apie juos nieko
+    | nesužino, tad vienintelis būdas užfiksuoti - kad pati naršyklė
+    | praneštų per šį endpoint'ą.
+    |
+    | Įjungus, registruojamas POST maršrutas, į kurį JS gali siųsti
+    | pranešimą (žr. README pavyzdį).
+    |
+    | SVARBU: klientinės pusės pranešimai NĖRA tokie patys patikimi kaip
+    | serverio užfiksuoti įvykiai - vartotojas techniškai gali jų
+    | neišsiųsti. Tokie įrašai žymimi "source": "client", kad auditą
+    | peržiūrintis asmuo matytų skirtumą.
+    |
+    */
+    'client_events' => [
+        'enabled' => env('AUDIT_LOG_CLIENT_EVENTS', false),
+
+        'route' => env('AUDIT_LOG_CLIENT_EVENTS_ROUTE', '/audit/client-event'),
+
+        // "web" - kad veiktų sesija ir CSRF apsauga (vartotojo
+        // identifikavimui). "throttle" - apsauga nuo žurnalo užtvindymo.
+        'middleware' => ['web', 'throttle:60,1'],
+
+        // Leidžiamos kategorijos - baltasis sąrašas, kad klientas
+        // negalėtų prikimšti žurnalo bet kokiais įrašais.
+        'allowed_categories' => ['export', 'print', 'view', 'copy'],
+
+        'max_description_length' => 200,
+        'max_context_keys' => 10,
+    ],
+
+    /*
+    |--------------------------------------------------------------------
     | Saugojimo terminas dienomis
     |--------------------------------------------------------------------
     |
