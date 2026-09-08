@@ -407,6 +407,50 @@ Serverio pusėje užfiksuoti įvykiai lieka autoritetingas šaltinis.
 aprašymo ilgis ir konteksto raktų kiekis apriboti, taikomas
 `throttle:60,1` - kad klientas negalėtų užtvindyti žurnalo.
 
+## Puslapių peržiūros - automatinis middleware
+
+Alternatyva rankiniam `LogsViews` naudojimui - fiksuoja peržiūras **be jokio
+kontrolerių redagavimo**. Trys režimai per `.env`:
+
+```
+AUDIT_LOG_PAGE_VIEWS=off         # numatytoji - tik rankinis logView()
+AUDIT_LOG_PAGE_VIEWS=whitelist   # tik nurodyti jautrūs maršrutai
+AUDIT_LOG_PAGE_VIEWS=all         # kiekvienas puslapio atidarymas
+```
+
+### `whitelist` režimas (rekomenduojamas)
+
+`config/audit.php`:
+```php
+'log_page_views' => [
+    'mode' => 'whitelist',
+    'routes' => [
+        'admin/userInfoList',
+        'admin/userCompetenceView/*',
+        'admin/payments_list/*',
+        'user/person_request_view/*',
+    ],
+],
+```
+
+Route parametrai (`{id}`) automatiškai įrašomi kaip `subject_id` - žurnale
+matysite ne tik „atidarė puslapį", bet ir **kieno** duomenys peržiūrėti.
+
+### `all` režimas - įspėjimas
+
+Fiksuoja kiekvieną atidarymą, įskaitant navigaciją, AJAX ir atgal/pirmyn.
+Vienas administratorius per dieną gali sugeneruoti tūkstančius įrašų. Dėl to:
+- rasti tikrai svarbų įvykį tampa sunkiau,
+- BDAR duomenų minimizavimo principą sunkiau pagrįsti.
+
+Naudokite tik jei reglamentas aiškiai to reikalauja.
+
+### Kas nefiksuojama visais režimais
+
+`POST`/`PUT`/`DELETE` (juos padengia modelio ir SQL mechanizmai), atsisiuntimai
+(juos padengia `LogFileDownloads`), JSON/AJAX atsakymai, klaidų puslapiai (ne
+2xx), ir maršrutai iš `exclude` sąrašo.
+
 ## Peržiūra - `LogsViews` trait
 
 Eloquent neturi "peržiūrėjimo" įvykio, tad šis kvietimas visada bus rankinis:

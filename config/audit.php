@@ -268,6 +268,57 @@ return [
 
     /*
     |--------------------------------------------------------------------
+    | Automatinis puslapių peržiūrų fiksavimas
+    |--------------------------------------------------------------------
+    |
+    | Alternatyva rankiniam LogsViews trait naudojimui - fiksuoja
+    | peržiūras BE jokio kontrolerių redagavimo.
+    |
+    | REŽIMAI:
+    |
+    |   'off'       - išjungta (NUMATYTOJI). Peržiūros fiksuojamos tik
+    |                 rankiniu $this->logView() kvietimu.
+    |
+    |   'whitelist' - fiksuojami TIK žemiau išvardinti maršrutai.
+    |                 REKOMENDUOJAMA: automatizavimo patogumas be žurnalų
+    |                 užtvindymo, o kiekvienas įrašas išlieka prasmingas.
+    |
+    |   'all'       - fiksuojamas KIEKVIENAS puslapio atidarymas.
+    |                 ĮSPĖJIMAS: generuoja labai daug įrašų (navigacija,
+    |                 AJAX, atgal/pirmyn). Rasti tikrai svarbų įvykį tampa
+    |                 sunkiau, o BDAR duomenų minimizavimo principą
+    |                 sunkiau pagrįsti. Naudokite tik jei reglamentas
+    |                 aiškiai to reikalauja.
+    |
+    | Visais režimais fiksuojami tik GET/HEAD sėkmingi HTML atsakymai -
+    | duomenų keitimą jau padengia modelio/SQL mechanizmai, atsisiuntimus -
+    | LogFileDownloads.
+    |
+    */
+    'log_page_views' => [
+        'mode' => env('AUDIT_LOG_PAGE_VIEWS', 'off'),
+
+        // Naudojama TIK 'whitelist' režimu. Palaiko "*" šablonus.
+        // Route parametrai (pvz. {id}) automatiškai įrašomi kaip
+        // subject_id - t.y. matysite, KIENO duomenys peržiūrėti.
+        'routes' => [
+            // 'admin/userInfoList',
+            // 'admin/userCompetenceView/*',
+            // 'admin/payments_list/*',
+            // 'user/person_request_view/*',
+        ],
+
+        // Praleidžiami maršrutai (taikoma VISUOSE režimuose). Naudinga
+        // 'all' režimu, kad nefiksuotų techninių/viešų puslapių.
+        'exclude' => [
+            'audit/*',
+            '_debugbar/*',
+            'captcha/*',
+        ],
+    ],
+
+    /*
+    |--------------------------------------------------------------------
     | Naršyklės talpyklos blokavimas atsisiunčiamiems failams
     |--------------------------------------------------------------------
     |

@@ -13,6 +13,7 @@ use Illuminate\Support\Facades\Event;
 use Illuminate\Support\ServiceProvider;
 use Vdu\TisLogging\Console\InstallCommand;
 use Vdu\TisLogging\Http\Middleware\LogFileDownloads;
+use Vdu\TisLogging\Http\Middleware\LogPageViews;
 use Vdu\TisLogging\Listeners\GlobalModelAuditListener;
 use Vdu\TisLogging\Listeners\LogFailedLogin;
 use Vdu\TisLogging\Listeners\LogLogout;
@@ -96,11 +97,18 @@ class AuditLogServiceProvider extends ServiceProvider
             $this->commands([
                 InstallCommand::class,
             ]);
-        } elseif (config('audit.log_downloads', true)) {
-            // Registruojame globalų middleware'į HTTP kernel'yje - projekto
-            // Kernel.php faile NIEKO keisti nereikia. Tik web/HTTP kontekste
-            // (ne artisan komandoms), kad nesikištume į CLI vykdymą.
-            $this->app->make(Kernel::class)->pushMiddleware(LogFileDownloads::class);
+        } else {
+            $kernel = $this->app->make(Kernel::class);
+
+            if (config('audit.log_downloads', true)) {
+                // Registruojame globalų middleware'į HTTP kernel'yje - projekto
+                // Kernel.php faile NIEKO keisti nereikia.
+                $kernel->pushMiddleware(LogFileDownloads::class);
+            }
+
+            if (config('audit.log_page_views.mode', 'off') !== 'off') {
+                $kernel->pushMiddleware(LogPageViews::class);
+            }
         }
     }
 

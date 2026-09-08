@@ -3,6 +3,32 @@
 Visi svarbūs paketo pakeitimai fiksuojami šiame faile.
 Versijavimas pagal [Semantic Versioning](https://semver.org/): MAJOR.MINOR.PATCH.
 
+## [2.5.0] - 2026-09-08
+
+### Pridėta
+- **`LogPageViews` middleware - automatinis puslapių peržiūrų fiksavimas** be
+  kontrolerių redagavimo. Iki šiol peržiūros reikalavo rankinio `LogsViews`
+  trait naudojimo kiekviename kontroleryje.
+- Trys režimai per `AUDIT_LOG_PAGE_VIEWS`:
+  - `off` (NUMATYTOJI) - tik rankinis `logView()`;
+  - `whitelist` - fiksuojami tik `config('audit.log_page_views.routes')`
+    išvardinti maršrutai (palaiko `*` šablonus). REKOMENDUOJAMA;
+  - `all` - kiekvienas puslapio atidarymas.
+- Route parametrai automatiškai įrašomi kaip `subject_id` - žurnale matoma,
+  KIENO duomenys peržiūrėti, ne tik kad puslapis atidarytas.
+- `exclude` sąrašas techniniams maršrutams praleisti.
+- 9 nauji testai.
+
+### Sąmoningi apribojimai
+- Fiksuojami tik `GET`/`HEAD` sėkmingi (2xx) HTML atsakymai. `POST`/`PUT`/
+  `DELETE` jau padengti modelio ir SQL mechanizmų, atsisiuntimai -
+  `LogFileDownloads`, o JSON/AJAX atsakymai paprastai techniniai, ne
+  "duomenų peržiūra".
+- `all` režimas generuoja labai daug įrašų. Tai apsunkina svarbių įvykių
+  paiešką ir BDAR duomenų minimizavimo principo pagrindimą - todėl
+  numatytoji reikšmė yra `off`, o dokumentacijoje rekomenduojamas
+  `whitelist`.
+
 ## [2.4.0] - 2026-09-08
 
 ### Pridėta
