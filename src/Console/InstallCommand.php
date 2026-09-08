@@ -11,16 +11,43 @@ class InstallCommand extends Command
     protected $description = 'Įdiegia VDU TIS audito žurnalizavimo sistemą (config, .env, žurnalų katalogas)';
 
     /**
-     * .env kintamieji ir jų numatytosios (default) reikšmės, kurias komanda
-     * pasiūlys pridėti, jei jų dar nėra faile.
+     * .env kintamieji, kuriuos komanda prideda, jei jų dar nėra faile.
+     *
+     * Struktūra: grupės pavadinimas => [kintamasis => [reikšmė, komentaras]].
+     * Grupės naudojamos tik tvarkingam .env failo formatavimui.
      */
-    protected $envDefaults = [
-        'AUDIT_LOG_APP_NAME' => null, // užpildomas dinamiškai iš config('app.name')
-        'AUDIT_LOG_BASE_PATH' => '/home/logs',
-        'AUDIT_LOG_AUDIT_FILENAME' => 'audit.log',
-        'AUDIT_LOG_ERROR_FILENAME' => 'error.log',
-        'AUDIT_LOG_RETENTION_DAYS' => '90',
-    ];
+    protected function envGroups(): array
+    {
+        return [
+            'Pagrindiniai nustatymai' => [
+                // AUDIT_LOG_APP_NAME užpildomas dinamiškai iš config('app.name').
+                'AUDIT_LOG_APP_NAME' => [null, 'Poaplankio pavadinimas zurnalu kataloge'],
+                'AUDIT_LOG_BASE_PATH' => ['/home/logs', 'Saknininis zurnalu katalogas serveryje'],
+                'AUDIT_LOG_AUDIT_FILENAME' => ['audit.log', null],
+                'AUDIT_LOG_ERROR_FILENAME' => ['error.log', null],
+                'AUDIT_LOG_RETENTION_DAYS' => ['90', 'Saugojimo terminas dienomis (0 = netrinti)'],
+            ],
+
+            'Modeliu ir duomenu baze' => [
+                'AUDIT_LOG_ALL_MODELS' => ['true', 'Automatiskai audituoti VISUS Eloquent modelius'],
+                'AUDIT_LOG_QUERIES' => ['false', 'Fiksuoti SQL uzklausas, apeinancias Eloquent (DB::table)'],
+                'AUDIT_LOG_CAPTURE_OLD_VALUES' => ['true', 'Nuskaityti senas reiksmes pries UPDATE/DELETE'],
+                'AUDIT_LOG_OLD_VALUES_MAX_ROWS' => ['5', 'Riba masiniams atnaujinimams'],
+                'AUDIT_LOG_MAX_BINDING_LENGTH' => ['500', 'Maks. reiksmes ilgis zurnale'],
+            ],
+
+            'Failai ir perziuros' => [
+                'AUDIT_LOG_DOWNLOADS' => ['true', 'Fiksuoti failu atsisiuntimus'],
+                'AUDIT_LOG_PREVENT_DOWNLOAD_CACHING' => ['true', 'Neleisti narsyklei talpinti atsisiuntimu'],
+                'AUDIT_LOG_DOWNLOAD_DEDUP_SECONDS' => ['10', 'Sujungti pasikartojancius atsisiuntimus'],
+                'AUDIT_LOG_PAGE_VIEWS' => ['off', 'Puslapiu perziuros: off | whitelist | all'],
+            ],
+
+            'Klientines puses ivykiai' => [
+                'AUDIT_LOG_CLIENT_EVENTS' => ['false', 'Endpointas narsykles pranesimams (SheetJS ir pan.)'],
+            ],
+        ];
+    }
 
     public function handle()
     {
@@ -59,30 +86,52 @@ class InstallCommand extends Command
             return;
         }
 
-        $this->envDefaults['AUDIT_LOG_APP_NAME'] = $this->envDefaults['AUDIT_LOG_APP_NAME']
-            ?? \Illuminate\Support\Str::slug(config('app.name', 'app'));
-
         $content = file_get_contents($envPath);
         $appended = [];
+        $additions = '';
 
-        foreach ($this->envDefaults as $key => $default) {
-            if (preg_match('/^'.preg_quote($key, '/').'=/m', $content)) {
-                $this->line("   {$key} - jau nustatytas, praleidžiu.");
-                continue;
+        foreach ($this->envGroups() as $groupName => $variables) {
+            $groupLines = '';
+
+            foreach ($variables as $key => [$default, $comment]) {
+                if (preg_match('/^'.preg_quote($key, '/').'=/m', $content)) {
+                    continue;
+                }
+
+                if ($key === 'AUDIT_LOG_APP_NAME' && $default === null) {
+                    $default = \Illuminate\Support\Str::slug(config('app.name', 'app'));
+                }
+
+                if ($comment) {
+                    $groupLines .= "\n# {$comment}";
+                }
+
+                $groupLines .= "\n{$key}={$default}";
+                $appended[] = $key;
             }
 
-            $content .= "\n{$key}={$default}";
-            $appended[] = $key;
+            if ($groupLines !== '') {
+                $additions .= "\n\n# --- VDU TIS Audit Log: {$groupName} ---".$groupLines;
+            }
         }
 
-        if (!empty($appended)) {
-            file_put_contents($envPath, rtrim($content)."\n");
-            $this->line('   Pridėti nauji kintamieji: '.implode(', ', $appended));
-            $this->warn('   PATIKRINKITE AUDIT_LOG_APP_NAME ir AUDIT_LOG_BASE_PATH reikšmes .env faile - numatytosios gali netikti jūsų serveriui.');
-
-            // .env pasikeitė, tad config cache (jei buvo) taptų nebeteisingas.
-            $this->callSilent('config:clear');
+        if (empty($appended)) {
+            $this->line('   Visi kintamieji jau nustatyti, praleidžiu.');
+            return;
         }
+
+        file_put_contents($envPath, rtrim($content).$additions."\n");
+
+        $this->line('   Pridėta naujų kintamųjų: '.count($appended));
+
+        foreach ($appended as $key) {
+            $this->line("     + {$key}");
+        }
+
+        $this->warn('   PATIKRINKITE AUDIT_LOG_APP_NAME ir AUDIT_LOG_BASE_PATH reikšmes - numatytosios gali netikti jūsų serveriui.');
+
+        // .env pasikeitė, tad config cache (jei buvo) taptų nebeteisingas.
+        $this->callSilent('config:clear');
     }
 
     protected function ensureLogDirectory(): void
@@ -123,16 +172,26 @@ class InstallCommand extends Command
 
     protected function printNextSteps(): void
     {
-        $this->info('Diegimas baigtas. Kiti žingsniai:');
-        $this->line('  1. Modeliuose, kuriuos norite audituoti (create/update/delete):');
-        $this->line('     use Vdu\TisLogging\Traits\Auditable;');
+        $this->info('Diegimas baigtas.');
         $this->line('');
-        $this->line('  2. Kontroleriuose, kur reikia fiksuoti peržiūrą:');
-        $this->line('     use Vdu\TisLogging\Traits\LogsViews;');
-        $this->line('     $this->logView($model); // metodo viduje');
+        $this->line('VEIKIA AUTOMATIŠKAI (nieko daryti nereikia):');
+        $this->line('  - prisijungimai/atsijungimai per Auth::attempt()');
+        $this->line('  - visų Eloquent modelių create/update/delete');
+        $this->line('  - failų atsisiuntimai (PDF, Excel, docx ir kt.)');
         $this->line('');
-        $this->line('  3. Prisijungimas/atsijungimas per standartinį Auth::attempt() jau veikia automatiškai.');
-        $this->line('     Jei projektas naudoja custom auth (SSO/rankinis guard->login()), reikės');
-        $this->line('     rankinio AuditLog::security(...) kvietimo tose vietose - žr. README.');
+        $this->line('REIKIA ĮJUNGTI .env faile (pagal poreikį):');
+        $this->line('  AUDIT_LOG_QUERIES=true         - DB::table() pakeitimai, apeinantys Eloquent');
+        $this->line('  AUDIT_LOG_PAGE_VIEWS=whitelist - puslapių peržiūros (nurodykite maršrutus');
+        $this->line('                                   config/audit.php log_page_views.routes)');
+        $this->line('  AUDIT_LOG_CLIENT_EVENTS=true   - naršyklėje vykstantys veiksmai (SheetJS)');
+        $this->line('');
+        $this->line('REIKIA RANKINIO KODO:');
+        $this->line('  1. app/Exceptions/Handler.php - sisteminių klaidų fiksavimui:');
+        $this->line('     use Vdu\TisLogging\Traits\LogsExceptions;');
+        $this->line('     public function report(Throwable $e) { $this->logException($e); parent::report($e); }');
+        $this->line('');
+        $this->line('  2. Jei projektas naudoja custom auth (SSO, rankinis guard->login()),');
+        $this->line('     nepavykę prisijungimai NEBUS fiksuojami automatiškai - reikia');
+        $this->line('     AuditLog::security(...) kvietimo login kontroleryje. Žr. README.');
     }
 }

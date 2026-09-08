@@ -3,6 +3,22 @@
 Visi svarbūs paketo pakeitimai fiksuojami šiame faile.
 Versijavimas pagal [Semantic Versioning](https://semver.org/): MAJOR.MINOR.PATCH.
 
+## [2.6.0] - 2026-09-08
+
+### Pridėta
+- **`audit:install` dabar prideda VISUS `AUDIT_LOG_*` kintamuosius** į `.env`.
+  Iki šiol komanda rašė tik pradinį penkių kintamųjų rinkinį, o vėliau pridėtos
+  funkcijos (`AUDIT_LOG_QUERIES`, `AUDIT_LOG_PAGE_VIEWS`, `AUDIT_LOG_CLIENT_EVENTS`
+  ir kt.) į jį nepateko - diegiant naują projektą juos tekdavo prisiminti ir
+  įrašyti rankomis.
+- Kintamieji grupuojami su antraštėmis ir komentarais, kad `.env` faile būtų
+  aišku, ką kiekvienas daro.
+- Praleidžiami jau esami kintamieji - komandą galima saugiai paleisti
+  pakartotinai esamuose projektuose, kad būtų pridėti tik trūkstami.
+- `audit:install` išvestis perrašyta: aiškiai atskirta, kas veikia
+  automatiškai, ką reikia įjungti `.env`, o kur būtinas rankinis kodas.
+- 3 nauji testai.
+
 ## [2.5.0] - 2026-09-08
 
 ### Pridėta

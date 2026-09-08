@@ -75,6 +75,57 @@ class InstallCommandTest extends TestCase
     }
 
     /** @test */
+    public function it_appends_all_feature_env_variables()
+    {
+        $this->artisan('audit:install')->assertExitCode(0);
+
+        $content = file_get_contents($this->envPath);
+
+        // Vėliau pridėtos funkcijos - be jų diegiant naują projektą tektų
+        // kintamuosius prisiminti rankomis.
+        $this->assertStringContainsString('AUDIT_LOG_ALL_MODELS=true', $content);
+        $this->assertStringContainsString('AUDIT_LOG_QUERIES=false', $content);
+        $this->assertStringContainsString('AUDIT_LOG_CAPTURE_OLD_VALUES=true', $content);
+        $this->assertStringContainsString('AUDIT_LOG_DOWNLOADS=true', $content);
+        $this->assertStringContainsString('AUDIT_LOG_PAGE_VIEWS=off', $content);
+        $this->assertStringContainsString('AUDIT_LOG_CLIENT_EVENTS=false', $content);
+    }
+
+    /** @test */
+    public function added_variables_are_grouped_and_commented()
+    {
+        $this->artisan('audit:install')->assertExitCode(0);
+
+        $content = file_get_contents($this->envPath);
+
+        $this->assertStringContainsString('# --- VDU TIS Audit Log: Pagrindiniai nustatymai ---', $content);
+        $this->assertStringContainsString('# --- VDU TIS Audit Log: Failai ir perziuros ---', $content);
+        $this->assertStringContainsString('# Puslapiu perziuros: off | whitelist | all', $content);
+    }
+
+    /** @test */
+    public function it_only_adds_variables_that_are_missing()
+    {
+        file_put_contents(
+            $this->envPath,
+            "APP_NAME=TestApp\nAUDIT_LOG_QUERIES=true\nAUDIT_LOG_PAGE_VIEWS=all\n"
+        );
+
+        $this->artisan('audit:install')->assertExitCode(0);
+
+        $content = file_get_contents($this->envPath);
+
+        // Esamos reikšmės nepaliestos.
+        $this->assertSame(1, substr_count($content, 'AUDIT_LOG_QUERIES='));
+        $this->assertStringContainsString('AUDIT_LOG_QUERIES=true', $content);
+        $this->assertSame(1, substr_count($content, 'AUDIT_LOG_PAGE_VIEWS='));
+        $this->assertStringContainsString('AUDIT_LOG_PAGE_VIEWS=all', $content);
+
+        // Trūkstamos - pridėtos.
+        $this->assertStringContainsString('AUDIT_LOG_DOWNLOADS=true', $content);
+    }
+
+    /** @test */
     public function it_creates_audit_and_error_log_directories()
     {
         $this->artisan('audit:install')->assertExitCode(0);
