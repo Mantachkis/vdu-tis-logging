@@ -9,7 +9,9 @@ use Illuminate\Contracts\Http\Kernel;
 use Illuminate\Database\Connection;
 use Illuminate\Database\Events\QueryExecuted;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Queue\Events\JobProcessing;
 use Illuminate\Support\Facades\Event;
+use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\ServiceProvider;
 use Vdu\TisLogging\Console\InstallCommand;
 use Vdu\TisLogging\Http\Middleware\LogFileDownloads;
@@ -21,6 +23,7 @@ use Vdu\TisLogging\Listeners\LogSentMail;
 use Vdu\TisLogging\Listeners\LogSuccessfulLogin;
 use Vdu\TisLogging\Listeners\QueryAuditListener;
 use Vdu\TisLogging\Support\OldValuesSnapshotStore;
+use Vdu\TisLogging\Support\QueueContext;
 
 class AuditLogServiceProvider extends ServiceProvider
 {
@@ -46,6 +49,8 @@ class AuditLogServiceProvider extends ServiceProvider
         Event::listen(Login::class, LogSuccessfulLogin::class);
         Event::listen(Logout::class, LogLogout::class);
         Event::listen(Failed::class, LogFailedLogin::class);
+
+        $this->registerQueueContextHandling();
 
         // Išsiųsti el. laiškai - reikšmingas veiksmas su asmens duomenimis,
         // kurio modelio/SQL mechanizmai nepamato (DB nekeičiamas).
@@ -141,7 +146,71 @@ class AuditLogServiceProvider extends ServiceProvider
         // pasiekus ribą būtų suformuota viena suvestinė.
         $this->app->singleton(\Vdu\TisLogging\Support\MailBatchTracker::class);
 
+        // BŪTINA singleton - kontekstas nustatomas darbo pradžioje ir
+        // naudojamas visų to darbo metu fiksuojamų įvykių.
+        $this->app->singleton(QueueContext::class);
+
         $this->app->alias(\Vdu\TisLogging\EventLogger::class, 'audit-log');
+    }
+
+    /**
+     * Perkelia vartotojo kontekstą iš HTTP užklausos į queue darbuotoją.
+     *
+     * Queue darbai (naujienlaiškiai, eksportai) vykdomi atskirame procese,
+     * kuriame nėra nei sesijos, nei HTTP užklausos - tad Auth::user() ten
+     * grąžina null. Be šio mechanizmo žurnale atsirastų "kažkas išsiuntė
+     * 500 laiškų" be autoriaus.
+     *
+     * Naudojami Laravel queue kabliukai:
+     *   createPayloadUsing - įrašo kontekstą į darbo payload'ą įstatymo metu;
+     *   before - atkuria jį darbuotojo procese;
+     *   after/failing - išvalo, kad tas pats darbuotojas nepriskirtų to
+     *   paties vartotojo kitų vartotojų darbams.
+     */
+    protected function registerQueueContextHandling(): void
+    {
+        if (!config('audit.queue_context', true)) {
+            return;
+        }
+
+        // createPayloadUsing egzistuoja nuo Laravel 5.7, bet tikriname
+        // apsaugai - be jo kontekstas tiesiog nebus perkeliamas.
+        if (!method_exists(Queue::class, 'createPayloadUsing')) {
+            return;
+        }
+
+        Queue::createPayloadUsing(function () {
+            try {
+                $captured = $this->app->make(QueueContext::class)->capture();
+
+                return empty($captured) ? [] : [QueueContext::PAYLOAD_KEY => $captured];
+            } catch (\Throwable $e) {
+                // Audito klaida NIEKADA neturi sutrukdyti darbo įstatymui.
+                return [];
+            }
+        });
+
+        Queue::before(function (JobProcessing $event) {
+            try {
+                $payload = $event->job->payload();
+
+                $this->app->make(QueueContext::class)
+                    ->set($payload[QueueContext::PAYLOAD_KEY] ?? null);
+            } catch (\Throwable $e) {
+                //
+            }
+        });
+
+        $clear = function () {
+            try {
+                $this->app->make(QueueContext::class)->clear();
+            } catch (\Throwable $e) {
+                //
+            }
+        };
+
+        Queue::after($clear);
+        Queue::failing($clear);
     }
 
     /**

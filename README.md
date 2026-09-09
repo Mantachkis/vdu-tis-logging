@@ -350,6 +350,45 @@ Aukšto dažnio techninės lentelės praleidžiamos per `config/audit.php`:
 naudoti modelio instancijas, arba nuolat, jei pilnas SQL lygmens
 padengimas svarbesnis už žurnalų glaustumą ir `old_values` tikslumą.
 
+## Queue darbai
+
+Queue darbai (naujienlaiškių siuntimas, eksportų generavimas, ataskaitos)
+vykdomi **atskirame procese**, kuriame nėra nei sesijos, nei HTTP užklausos -
+tad `Auth::user()` ten grąžina `null`, o `Request::ip()` rodo darbuotojo, ne
+realaus vartotojo IP.
+
+Be jokios konfigūracijos paketas išsaugo vartotojo kontekstą darbo payload'e
+įstatymo momentu ir atkuria jį darbuotojo procese:
+
+```json
+{
+  "message": "Išsiųsta laiškų suvestinė (482 laiškų): Naujienlaiškis",
+  "context": {
+    "user_id": 33131,
+    "user_identifier": "mantas.garliauskas@vdu.lt",
+    "ip_address": "193.219.38.75"
+  }
+}
+```
+
+Be šio mechanizmo tas pats įrašas turėtų `user_id: null` - žurnale liktų
+„kažkas išsiuntė 482 laiškus" be autoriaus.
+
+Pirmenybės tvarka: eksplicitiškai perduoti `$data` laukai → realiai
+prisijungęs vartotojas → queue kontekstas. Tad jei darbuotojo procese kažkodėl
+liktų senas kontekstas, realus vartotojas visada turės pirmenybę.
+
+Kontekstas išvalomas darbui pasibaigus (`Queue::after`) ir jam sugedus
+(`Queue::failing`) - kitaip ilgai gyvuojantis darbuotojas priskirtų tą patį
+vartotoją ir kitų žmonių darbams.
+
+```
+AUDIT_LOG_QUEUE_CONTEXT=true    # numatytoji
+```
+
+Reikalauja Laravel 5.7+ (`Queue::createPayloadUsing`). Senesnėse versijose
+tyliai praleidžiama.
+
 ## Jautrūs laukai
 
 Trys lygiai, kuriuose laukai blokuojami:

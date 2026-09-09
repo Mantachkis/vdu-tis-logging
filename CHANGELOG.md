@@ -3,6 +3,26 @@
 Visi svarbūs paketo pakeitimai fiksuojami šiame faile.
 Versijavimas pagal [Semantic Versioning](https://semver.org/): MAJOR.MINOR.PATCH.
 
+## [2.12.0] - 2026-09-09
+
+### Pridėta
+- **Queue konteksto perkėlimas.** Queue darbai vykdomi atskirame procese be
+  sesijos ir HTTP užklausos, tad `Auth::user()` ten grąžindavo `null` -
+  žurnale atsirasdavo "kažkas išsiuntė 500 laiškų" be autoriaus, nors būtent
+  autorius auditui svarbiausias.
+- Vartotojo kontekstas (ID, identifikatorius, IP, User-Agent) išsaugomas darbo
+  payload'e per `Queue::createPayloadUsing` įstatymo momentu ir atkuriamas
+  darbuotojo procese per `Queue::before`.
+- Kontekstas išvalomas per `Queue::after` ir `Queue::failing` - kitaip ilgai
+  gyvuojantis darbuotojas priskirtų tą patį vartotoją kitų žmonių darbams.
+- Pirmenybės tvarka: eksplicitiškai perduoti `$data` laukai → realiai
+  prisijungęs vartotojas → queue kontekstas.
+- `EventLogger` nebenaudoja `Request::ip()` konsolės kontekste, kur ji
+  grąžindavo netinkamą reikšmę.
+- `EventLogger::currentUser()` - vieša prieiga prie guard'ų paieškos logikos.
+- Išjungiama per `AUDIT_LOG_QUEUE_CONTEXT=false`. Reikalauja Laravel 5.7+.
+- 7 nauji testai.
+
 ## [2.11.0] - 2026-09-09
 
 ### Pakeista

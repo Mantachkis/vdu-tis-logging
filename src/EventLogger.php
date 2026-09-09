@@ -7,6 +7,7 @@ use Illuminate\Support\Facades\Request;
 use Monolog\Logger;
 use Monolog\Handler\RotatingFileHandler;
 use Monolog\Formatter\JsonFormatter;
+use Vdu\TisLogging\Support\QueueContext;
 
 /**
  * Centrinis įvykių žurnalizavimo servisas.
@@ -106,14 +107,24 @@ class EventLogger
     {
         $user = $this->resolveAuthenticatedUser();
 
+        // Queue darbuotojo procese nėra nei sesijos, nei HTTP užklausos,
+        // tad Auth::user() grąžina null. Tokiu atveju naudojame kontekstą,
+        // išsaugotą darbo įstatymo momentu (žr. QueueContext) - kitaip
+        // žurnale atsirastų "kažkas išsiuntė 500 laiškų" be autoriaus.
+        $queue = app(QueueContext::class);
+
         $context = [
             'occurred_at'     => now()->toIso8601String(),
             'event_type'      => $eventType,
             'category'        => $category,
-            'user_id'         => $data['user_id'] ?? optional($user)->id,
-            'user_identifier' => $data['user_identifier'] ?? optional($user)->email,
-            'ip_address'      => Request::ip(),
-            'user_agent'      => Request::header('User-Agent'),
+            'user_id'         => $data['user_id']
+                ?? optional($user)->getAuthIdentifier()
+                ?? $queue->get('user_id'),
+            'user_identifier' => $data['user_identifier']
+                ?? ($user ? ($user->email ?? $user->username ?? null) : null)
+                ?? $queue->get('user_identifier'),
+            'ip_address'      => $this->requestIp() ?? $queue->get('ip_address'),
+            'user_agent'      => $this->requestUserAgent() ?? $queue->get('user_agent'),
             'subject_type'    => $data['subject_type'] ?? null,
             'subject_id'      => $data['subject_id'] ?? null,
             'old_values'      => $data['old_values'] ?? null,
@@ -154,6 +165,39 @@ class EventLogger
      * dažniausias atvejis), o jei ten nieko nerasta - visus kitus projekte
      * config('auth.guards') sukonfigūruotus guard'us.
      */
+    /**
+     * Prisijungęs vartotojas (bet kuriame guard'e) arba null.
+     *
+     * Vieša, kad QueueContext galėtų surinkti tą patį kontekstą, kokį
+     * fiksuotų sinchroninis kvietimas.
+     */
+    public function currentUser()
+    {
+        return $this->resolveAuthenticatedUser();
+    }
+
+    /**
+     * Konsolės/queue kontekste HTTP užklausos nėra, tad Request fasadas
+     * gali grąžinti niekam netinkamą reikšmę arba mesti išimtį.
+     */
+    protected function requestIp(): ?string
+    {
+        try {
+            return app()->runningInConsole() ? null : (Request::ip() ?: null);
+        } catch (\Throwable $e) {
+            return null;
+        }
+    }
+
+    protected function requestUserAgent(): ?string
+    {
+        try {
+            return app()->runningInConsole() ? null : (Request::header('User-Agent') ?: null);
+        } catch (\Throwable $e) {
+            return null;
+        }
+    }
+
     protected function resolveAuthenticatedUser()
     {
         try {

@@ -31,6 +31,7 @@ class InstallCommand extends Command
             'Modeliu ir duomenu baze' => [
                 'AUDIT_LOG_ALL_MODELS' => ['true', 'Automatiskai audituoti VISUS Eloquent modelius'],
                 'AUDIT_LOG_QUERIES' => ['false', 'Fiksuoti SQL uzklausas, apeinancias Eloquent (DB::table)'],
+                'AUDIT_LOG_QUEUE_CONTEXT' => ['true', 'Perkelti vartotojo kontesta i queue darbus'],
                 'AUDIT_LOG_CAPTURE_OLD_VALUES' => ['true', 'Nuskaityti senas reiksmes pries UPDATE/DELETE'],
                 'AUDIT_LOG_OLD_VALUES_MAX_ROWS' => ['5', 'Riba masiniams atnaujinimams'],
                 'AUDIT_LOG_MAX_BINDING_LENGTH' => ['500', 'Maks. reiksmes ilgis zurnale'],

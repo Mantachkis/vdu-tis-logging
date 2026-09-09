@@ -91,6 +91,27 @@ return [
 
     /*
     |--------------------------------------------------------------------
+    | Queue konteksto perkėlimas
+    |--------------------------------------------------------------------
+    |
+    | Queue darbai (naujienlaiškių siuntimas, eksportų generavimas,
+    | ataskaitos) vykdomi ATSKIRAME procese, kuriame nėra nei sesijos, nei
+    | HTTP užklausos - tad Auth::user() ten grąžina null, o Request::ip()
+    | rodo darbuotojo, ne realaus vartotojo IP.
+    |
+    | Įjungus, vartotojo kontekstas (ID, identifikatorius, IP, User-Agent)
+    | išsaugomas darbo payload'e įstatymo momentu ir atkuriamas darbuotojo
+    | procese - tad žurnale matoma, KAS realiai inicijavo veiksmą, o ne
+    | "kažkas išsiuntė 500 laiškų".
+    |
+    | Reikalauja Laravel 5.7+ (Queue::createPayloadUsing). Senesnėse
+    | versijose tyliai praleidžiama.
+    |
+    */
+    'queue_context' => env('AUDIT_LOG_QUEUE_CONTEXT', true),
+
+    /*
+    |--------------------------------------------------------------------
     | Automatinis VISŲ Eloquent modelių audito fiksavimas
     |--------------------------------------------------------------------
     |
