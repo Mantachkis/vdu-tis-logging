@@ -16,6 +16,8 @@ class AuditableTest extends TestCase
             $table->string('title');
             $table->string('password')->nullable();
             $table->string('pass')->nullable();
+            $table->string('pers_code')->nullable();
+            $table->string('ckods')->nullable();
             $table->timestamps();
         });
     }
@@ -91,5 +93,37 @@ class AuditableTest extends TestCase
 
         $this->assertSame('delete', $decoded['context']['category']);
         $this->assertSame('Bus ištrintas', $decoded['context']['old_values']['title']);
+    }
+
+    /** @test */
+    public function pers_code_is_excluded_globally_without_model_configuration()
+    {
+        // Asmens kodas blokuojamas paketo lygmeniu, tad modeliui nereikia
+        // savo auditExclude() metodo - VDU sistemose sis stulpelis
+        // kartojasi keliose lentelese.
+        TestPost::create([
+            'title' => 'Su asmens kodu',
+            'pers_code' => '38711100708',
+        ]);
+
+        $decoded = $this->lastLogEntry('audit');
+
+        $this->assertArrayNotHasKey('pers_code', $decoded['context']['new_values']);
+        $this->assertSame('Su asmens kodu', $decoded['context']['new_values']['title']);
+    }
+
+    /** @test */
+    public function ckods_is_logged_because_it_is_an_employee_code_not_personal_data()
+    {
+        // ckods yra vidinis darbuotojo identifikatorius, ne asmens kodas -
+        // auditui jis NAUDINGAS, tad samoningai NEblokuojamas.
+        TestPost::create([
+            'title' => 'Su darbuotojo kodu',
+            'ckods' => '78935',
+        ]);
+
+        $decoded = $this->lastLogEntry('audit');
+
+        $this->assertSame('78935', $decoded['context']['new_values']['ckods']);
     }
 }

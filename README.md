@@ -350,6 +350,51 @@ Aukšto dažnio techninės lentelės praleidžiamos per `config/audit.php`:
 naudoti modelio instancijas, arba nuolat, jei pilnas SQL lygmens
 padengimas svarbesnis už žurnalų glaustumą ir `old_values` tikslumą.
 
+## Jautrūs laukai
+
+Trys lygiai, kuriuose laukai blokuojami:
+
+**1. Paketo globalus sąrašas** (`config/audit.php` → `exclude`) - taikomas
+visiems modeliams:
+
+```php
+'exclude' => [
+    'password', 'pass', 'passwd', 'pwd',
+    'remember_token', 'api_token',
+    'pers_code',   // asmens kodas
+],
+```
+
+`pers_code` blokuojamas globaliai, nes VDU sistemose šis stulpelis kartojasi
+keliose lentelėse - taip nereikia kiekviename modelyje rašyti `auditExclude()`.
+
+`ckods` sąmoningai **NEblokuojamas** - tai darbuotojo kodas, vidinis
+identifikatorius, o ne asmens duomuo. Auditui jis naudingas: leidžia susieti
+veiksmą su konkrečiu darbuotoju. Jei jūsų sistemoje `ckods` reiškia ką kita ir
+yra jautrus, įtraukite jį į `exclude`.
+
+**2. Modelio sąrašas** - domeno-specifiniams laukams tame viename modelyje:
+
+```php
+class Invoice extends Model
+{
+    public function auditExclude(): array
+    {
+        return ['internal_notes', 'bank_account'];
+    }
+}
+```
+
+Veikia ir su `Auditable` trait, ir be jo (globaliame režime).
+
+**3. SQL lygmens automatinis filtravimas** - bcrypt/argon hash'ai keičiami į
+`[REDACTED]`, base64 paveikslėliai į `[BASE64_IMAGE]`, ilgesnės nei 500
+simbolių reikšmės trumpinamos. Taikoma automatiškai, be konfigūracijos.
+
+**Prieš diegiant į naują projektą** peržiūrėkite audituojamų modelių stulpelius
+- paketo sąrašas yra saugus startas, ne garantija, kad visi jautrūs laukai bus
+atpažinti.
+
 ## Klientinės pusės veiksmai (SheetJS, print, iškarpinė)
 
 Kai kurie veiksmai vyksta **vien naršyklėje** ir nesukelia jokios HTTP

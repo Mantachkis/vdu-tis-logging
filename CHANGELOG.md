@@ -3,6 +3,27 @@
 Visi svarbūs paketo pakeitimai fiksuojami šiame faile.
 Versijavimas pagal [Semantic Versioning](https://semver.org/): MAJOR.MINOR.PATCH.
 
+## [2.11.0] - 2026-09-09
+
+### Pakeista
+- **`pers_code` (asmens kodas) blokuojamas GLOBALIAI** paketo `exclude` sąraše.
+  Anksčiau jį tekdavo blokuoti kiekvieno modelio `auditExclude()` metode, o VDU
+  sistemose šis stulpelis kartojasi keliose lentelėse (`esp.users`, `cilveks`
+  ir kt.).
+- `ckods` (darbuotojo kodas) sąmoningai NEblokuojamas ir dabar tai
+  eksplicitiškai dokumentuota config faile - tai vidinis darbuotojo
+  identifikatorius, ne asmens duomuo, tad auditui naudingas: leidžia susieti
+  veiksmą su konkrečiu darbuotoju.
+- README papildytas skiltimi „Jautrūs laukai" su trimis blokavimo lygiais
+  (paketo globalus sąrašas, modelio `auditExclude()`, SQL lygmens automatinis
+  filtravimas).
+- 2 nauji testai.
+
+### Diegiantiems iš ankstesnių versijų
+Jei projekto modeliuose turite `auditExclude()` su `'pers_code'`, jį galima
+pašalinti - paketas jau blokuoja globaliai. Jei tame pačiame sąraše turite
+`'ckods'` ir norite, kad jis būtų fiksuojamas, pašalinkite jį.
+
 ## [2.10.1] - 2026-09-08
 
 ### Dokumentacija

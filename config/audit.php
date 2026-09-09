@@ -60,16 +60,33 @@ return [
     |
     | Sąrašas apima dažniausius slaptažodžio lauko pavadinimų variantus,
     | nes skirtingi projektai/lentelės naudoja skirtingas konvencijas
-    | (pvz. "pass" vietoj "password"). VIS TIEK PATIKRINKITE kiekvieno
-    | audituojamo modelio laukus rankomis prieš diegdami - šis sąrašas
-    | yra saugus numatytasis startas, ne garantija, kad visi jautrūs
-    | laukai (asmens kodai, gimimo datos ir pan.) bus automatiškai
-    | aptikti. Naudokite auditExclude() modelyje papildomiems laukams.
+    | (pvz. "pass" vietoj "password"), ir asmens kodą, kuris VDU sistemose
+    | yra "pers_code".
+    |
+    | VIS TIEK PATIKRINKITE kiekvieno audituojamo modelio laukus rankomis
+    | prieš diegdami - šis sąrašas yra saugus numatytasis startas, ne
+    | garantija, kad visi jautrūs laukai bus automatiškai aptikti.
+    | Papildomiems laukams naudokite modelio auditExclude() metodą.
+    |
+    | KO ČIA SĄMONINGAI NĖRA:
+    |
+    |   'ckods' - darbuotojo kodas. Tai NE asmens kodas, o vidinis
+    |   darbuotojo identifikatorius, tad auditui jis NAUDINGAS: leidžia
+    |   susieti veiksmą su konkrečiu darbuotoju. Jei jūsų sistemoje
+    |   'ckods' reiškia ką kita ir yra jautrus - įtraukite jį čia.
     |
     */
     'exclude' => [
+        // Slaptažodžiai ir raktai - universaliai jautrūs.
         'password', 'pass', 'passwd', 'pwd',
         'remember_token', 'api_token',
+
+        // Asmens kodas - jautrus asmens duomuo (BDAR 9 str. požiūriu
+        // ypač saugotinas identifikatorius). Blokuojamas GLOBALIAI, nes
+        // VDU sistemose šis stulpelis kartojasi keliose lentelėse
+        // (esp.users, cilveks ir kt.) - vietoj to, kad kiekviename
+        // modelyje būtų rašomas auditExclude().
+        'pers_code',
     ],
 
     /*
