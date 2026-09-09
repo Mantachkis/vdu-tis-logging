@@ -394,14 +394,83 @@ return [
         |
         | Dauguma JSON atsakymų yra techniniai (statuso tikrinimai, kalbos
         | failai), tad pagal nutylėjimą jie NEfiksuojami. Bet kai kurie
-        | atiduoda asmens duomenis - server-side DataTables, autocomplete
-        | su vartotojų sąrašais - tokie yra reali duomenų peržiūra.
+        | atiduoda asmens duomenis - tokie yra reali duomenų peržiūra ir
+        | juos reikia išvardinti čia.
         |
-        | Čia išvardinkite tokius endpoint'us.
+        | KADA TO REIKIA - dažniausi atvejai:
+        |
+        | 1) MODALŲ TURINYS. Jei modalas duomenis gauna per AJAX:
+        |
+        |        $('#editModal').on('show.bs.modal', function () {
+        |            $.get('/admin/person/' + id, function (data) { ... });
+        |        });
+        |
+        |    tai reali asmens duomenų peržiūra, kurios serveris kitaip
+        |    neužfiksuotų kaip peržiūros. Įtraukite tokį endpoint'ą:
+        |    'admin/person/*'
+        |
+        |    SVARBU: jei modalas duomenis skaito iš data-* atributų, jau
+        |    įrašytų puslapyje renderinimo metu (dažnas atvejis), tai
+        |    JOKIOS užklausos į serverį nevyksta - ir įtraukti nieko
+        |    nereikia. Tie duomenys jau buvo atiduoti atidarant puslapį,
+        |    o TAS atidarymas jau užfiksuotas.
+        |
+        | 2) AUTOCOMPLETE su asmenų sąrašais.
+        |
+        | 3) Bet kuris kitas AJAX, grąžinantis JSON su asmens duomenimis.
+        |
+        | Server-side DataTables įtraukti NEREIKIA - jie atpažįstami
+        | automatiškai (žr. detect_datatables žemiau).
+        |
+        | KAIP SURASTI tokius endpoint'us naujame projekte: naršyklėje
+        | F12 -> Network -> XHR, atidarykite kelis modalus ir puslapius su
+        | lentelėmis. Jei atsiranda užklausų, grąžinančių JSON su asmens
+        | duomenimis - jų URL įtraukite čia.
         */
         'json_routes' => [
             // 'admin/userInfoList/data',
+            // 'admin/person/*',
         ],
+
+        /*
+        | Automatinis server-side DataTables aptikimas
+        |
+        | Kai lentelė pildoma per AJAX (yajra/laravel-datatables serverSide
+        | režimu), puslapis įkeliamas tuščias, o realūs asmens duomenys
+        | atiduodami atskira JSON užklausa. Fiksuojant tik puslapio
+        | atidarymą, auditas parodytų "atidarė vartotojų sąrašą", bet ne
+        | tai, kad realiai buvo atiduoti 500 asmenų duomenys.
+        |
+        | DataTables atsakymai atpažįstami pagal STRUKTŪRĄ (draw,
+        | recordsTotal, recordsFiltered, data laukai) - tai standartizuota
+        | specifikacijos dalis, tad jokio maršrutų sąrašo NEREIKIA.
+        |
+        | Fiksuojama: kiek įrašų atiduota, kiek iš viso egzistuoja, ko
+        | buvo ieškoma (search frazė) ir kuris lapas. Paieškos frazė
+        | auditui ypač vertinga - "administratorius ieškojo 'Jonaitis'"
+        | pasako daugiau nei "atidarė vartotojų sąrašą".
+        |
+        | Veikia VISUOSE režimuose (išskyrus 'off'), nes tai realus asmens
+        | duomenų atidavimas.
+        */
+        'detect_datatables' => env('AUDIT_LOG_DETECT_DATATABLES', true),
+
+        /*
+        | DataTables generuoja atskirą užklausą kiekvienam lapo perėjimui,
+        | rikiavimui ir net kiekvienam paieškos simboliui. Vienas
+        | administratorius, ieškantis žmogaus, gali sugeneruoti dešimtis
+        | beveik identiškų užklausų - todėl sujungiame tas, kurios per šį
+        | sekundžių langą turi tą patį URL ir tuos pačius parametrus.
+        | 0 = išjungti sujungimą.
+        */
+        'datatables_dedup_seconds' => env('AUDIT_LOG_DATATABLES_DEDUP_SECONDS', 5),
+
+        /*
+        | Didesnių nei ši riba (baitais) JSON atsakymų nedekoduojame -
+        | DataTables atsakymai su tūkstančiais įrašų gali būti kelių
+        | megabaitų, o jų dekodavimas be reikalo apkrautų atmintį.
+        */
+        'datatables_max_decode_bytes' => 2097152,
     ],
 
     /*

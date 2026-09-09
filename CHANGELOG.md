@@ -3,6 +3,44 @@
 Visi svarbūs paketo pakeitimai fiksuojami šiame faile.
 Versijavimas pagal [Semantic Versioning](https://semver.org/): MAJOR.MINOR.PATCH.
 
+## [2.10.1] - 2026-09-08
+
+### Dokumentacija
+- `config/audit.php` ir README papildyti aiškiu paaiškinimu, kada modalų
+  turinį reikia įtraukti į `json_routes`, o kada ne:
+  - modalas gauna duomenis per AJAX (JSON) → reikia įtraukti;
+  - modalas skaito duomenis iš `data-*` atributų, jau įrašytų puslapyje →
+    įtraukti NEREIKIA, nes jokios užklausos nevyksta, o duomenų atidavimas
+    jau užfiksuotas atidarant puslapį.
+- Pridėta instrukcija, kaip surasti tokius endpoint'us naujame projekte
+  (F12 → Network → XHR).
+
+## [2.10.0] - 2026-09-08
+
+### Pridėta
+- **Automatinis server-side DataTables aptikimas.** Kai lentelė pildoma per
+  AJAX (`yajra/laravel-datatables` `serverSide` režimu), puslapis įkeliamas
+  tuščias, o realūs asmens duomenys atiduodami atskira JSON užklausa - iki šiol
+  auditas fiksavo tik puslapio atidarymą, bet ne tai, kad buvo atiduoti,
+  pvz., 500 asmenų duomenys.
+- Atpažinimas pagal atsakymo STRUKTŪRĄ (`draw`, `recordsTotal`,
+  `recordsFiltered`, `data`), ne pagal maršrutą - jokio rankinio sąrašo
+  NEREIKIA, veikia bet kuriame projekte iš karto.
+- Fiksuojama: `records_returned`, `records_total`, `records_filtered`,
+  `search` (paieškos frazė) ir `page`. Paieškos frazė auditui ypač vertinga.
+- Įrašai pažymimi `"source": "datatables"`.
+- **Sujungimas:** DataTables siunčia užklausą kiekvienam lapo perėjimui,
+  rikiavimui ir paieškos simboliui - užklausos su tais pačiais parametrais
+  sujungiamos per `AUDIT_LOG_DATATABLES_DEDUP_SECONDS` (numatytoji 5 sek.).
+  `draw` parametras į dedup raktą neįtraukiamas, nes kinta kiekvienai užklausai.
+- Veikia visuose režimuose (išskyrus `off`), nes tai realus asmens duomenų
+  atidavimas. Išjungiama per `AUDIT_LOG_DETECT_DATATABLES=false`.
+- Didesni nei 2 MB JSON atsakymai nedekoduojami, kad be reikalo neapkrautų
+  atminties.
+- `json_routes` sąrašas ir toliau veikia ne-DataTables AJAX užklausoms
+  (autocomplete su vartotojų sąrašais ir pan.).
+- 10 naujų testų.
+
 ## [2.9.0] - 2026-09-08
 
 ### Pridėta

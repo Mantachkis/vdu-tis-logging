@@ -556,6 +556,86 @@ Suvestinė rašoma per `register_shutdown_function()`, tad veikia ir CLI
 kontekste (artisan komandos, queue darbuotojai), kur jokio HTTP middleware
 nėra.
 
+### Server-side DataTables - fiksuojama automatiškai
+
+Kai lentelė pildoma per AJAX (`yajra/laravel-datatables` `serverSide` režimu),
+puslapis įkeliamas tuščias, o realūs asmens duomenys atiduodami atskira JSON
+užklausa. Fiksuojant tik puslapio atidarymą, auditas parodytų „atidarė
+vartotojų sąrašą", bet ne tai, kad realiai buvo atiduoti 500 asmenų duomenys.
+
+**Jokio maršrutų sąrašo nereikia** - DataTables atsakymai atpažįstami pagal
+struktūrą (`draw`, `recordsTotal`, `recordsFiltered`, `data` laukai), kuri yra
+standartizuota specifikacijos dalis:
+
+```json
+{
+  "message": "Peržiūrėti duomenys (DataTables): /admin/users/data",
+  "context": {
+    "category": "view",
+    "context": {
+      "source": "datatables",
+      "records_returned": 2,
+      "records_total": 1847,
+      "records_filtered": 2,
+      "search": "Jonaitis",
+      "page": 1
+    }
+  }
+}
+```
+
+Paieškos frazė auditui ypač vertinga - „administratorius ieškojo 'Jonaitis'"
+pasako daugiau nei „atidarė vartotojų sąrašą".
+
+Veikia visuose režimuose (išskyrus `off`), nes tai realus asmens duomenų
+atidavimas. Išjungiama:
+
+```
+AUDIT_LOG_DETECT_DATATABLES=false
+```
+
+**Sujungimas:** DataTables siunčia užklausą kiekvienam lapo perėjimui,
+rikiavimui ir net kiekvienam paieškos simboliui. Užklausos su tuo pačiu URL ir
+tais pačiais parametrais sujungiamos per `AUDIT_LOG_DATATABLES_DEDUP_SECONDS`
+(numatytoji 5 sek.) langą, tad vienas paieškos veiksmas duoda vieną įrašą, o ne
+dešimtis. `draw` parametras į raktą neįtraukiamas, nes jis kinta kiekvienai
+užklausai.
+
+### Kiti AJAX endpoint'ai ir modalai
+
+Ne-DataTables AJAX užklausoms, kurios atiduoda asmens duomenis, naudokite
+`json_routes` sąrašą - jis veikia nepriklausomai nuo DataTables aptikimo.
+
+**Modalai.** Jei modalas duomenis gauna per AJAX, tai reali asmens duomenų
+peržiūra ir tokį endpoint'ą reikia įtraukti:
+
+```js
+$('#editModal').on('show.bs.modal', function () {
+    $.get('/admin/person/' + id, function (data) { ... });   // ← reikia įtraukti
+});
+```
+
+```php
+'json_routes' => [
+    'admin/person/*',
+],
+```
+
+Bet jei modalas duomenis skaito iš `data-*` atributų, jau įrašytų puslapyje
+renderinimo metu, **įtraukti nieko nereikia**:
+
+```html
+<button data-id="{{ $item->id }}" data-semester="{{ $item->semester }}">
+```
+
+Jokios užklausos į serverį nevyksta - tie duomenys jau buvo atiduoti atidarant
+puslapį, o tas atidarymas jau užfiksuotas.
+
+**Kaip surasti tokius endpoint'us naujame projekte:** naršyklėje F12 → Network →
+XHR, atidarykite kelis modalus ir puslapius su lentelėmis. Jei atsiranda
+užklausų, grąžinančių JSON su asmens duomenimis - jų URL įtraukite į
+`json_routes`.
+
 ### Kas nefiksuojama visais režimais
 
 `POST`/`PUT`/`DELETE` (nebent išvardinti `post_routes`), atsisiuntimai (juos

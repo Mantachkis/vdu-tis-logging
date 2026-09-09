@@ -42,6 +42,7 @@ class InstallCommand extends Command
                 'AUDIT_LOG_DOWNLOAD_DEDUP_SECONDS' => ['10', 'Sujungti pasikartojancius atsisiuntimus'],
                 'AUDIT_LOG_PAGE_VIEWS' => ['off', 'Puslapiu perziuros: off | whitelist | all'],
                 'AUDIT_LOG_POST_VIEWS' => ['whitelist', 'POST kaip perziura: off | whitelist | auto'],
+                'AUDIT_LOG_DETECT_DATATABLES' => ['true', 'Automatiskai fiksuoti server-side DataTables uzklausas'],
             ],
 
             'El. pastas' => [

@@ -3,9 +3,12 @@
 namespace Vdu\TisLogging\Http\Middleware;
 
 use Closure;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Str;
 use Symfony\Component\HttpFoundation\Response;
 use Vdu\TisLogging\EventLogger;
+use Vdu\TisLogging\Support\DataTablesResponseInspector;
 
 /**
  * Automatiškai fiksuoja puslapių peržiūras, be jokio kontrolerių
@@ -61,37 +64,118 @@ class LogPageViews
             return;
         }
 
-        if (!$this->isViewableResponse($request, $response, $path)) {
+        // DataTables atsakymai atpažįstami pagal STRUKTŪRĄ, ne pagal
+        // maršrutą, tad jokio rankinio sąrašo nereikia. Tikriname pirma,
+        // nes jie yra JSON - o JSON pagal nutylėjimą praleidžiamas.
+        $dataTables = $this->detectDataTables($request, $response);
+
+        if ($dataTables === null && !$this->isViewableResponse($request, $response, $path)) {
             return;
         }
 
         // "post_routes" ir "json_routes" veikia kaip baltieji sąrašai VISUOSE
         // režimuose - t.y. net 'whitelist' režimu jų nereikia dubliuoti
-        // pagrindiniame "routes" sąraše.
-        $explicitlyListed = $this->matchesAny($path, config('audit.log_page_views.post_routes', []))
+        // pagrindiniame "routes" sąraše. DataTables taip pat fiksuojami
+        // visais režimais, nes tai realus asmens duomenų atidavimas.
+        $explicitlyListed = $dataTables !== null
+            || $this->matchesAny($path, config('audit.log_page_views.post_routes', []))
             || $this->matchesAny($path, config('audit.log_page_views.json_routes', []));
 
         if ($mode === 'whitelist' && !$explicitlyListed && !$this->matchesWhitelist($path)) {
             return;
         }
 
+        if ($dataTables !== null && $this->isDuplicateDataTablesRequest($request)) {
+            return;
+        }
+
         $route = $request->route();
+
+        $context = [
+            'url' => $request->fullUrl(),
+            'method' => $request->method(),
+            'route_name' => $route ? $route->getName() : null,
+            'route_params' => $route ? $this->scalarParams($route) : [],
+        ];
+
+        $description = 'Peržiūrėtas puslapis: /'.$path;
+
+        if ($dataTables !== null) {
+            $context = array_merge($context, $dataTables, ['source' => 'datatables']);
+            $description = 'Peržiūrėti duomenys (DataTables): /'.$path;
+        }
 
         app(EventLogger::class)->info(
             'view',
-            'Peržiūrėtas puslapis: /'.$path,
+            $description,
             [
                 // Route parametrai (pvz. {id}) - tai dažniausiai ir yra
                 // konkretaus peržiūrėto įrašo identifikatorius.
                 'subject_id' => $this->resolveSubjectId($route),
-                'context' => [
-                    'url' => $request->fullUrl(),
-                    'method' => $request->method(),
-                    'route_name' => $route ? $route->getName() : null,
-                    'route_params' => $route ? $this->scalarParams($route) : [],
-                ],
+                'context' => $context,
             ]
         );
+    }
+
+    /**
+     * @return array|null DataTables informacija arba null, jei tai ne
+     *                    DataTables atsakymas (ar aptikimas išjungtas)
+     */
+    protected function detectDataTables($request, $response): ?array
+    {
+        if (!config('audit.log_page_views.detect_datatables', true)) {
+            return null;
+        }
+
+        if ($response->getStatusCode() < 200 || $response->getStatusCode() >= 300) {
+            return null;
+        }
+
+        $inspector = app(DataTablesResponseInspector::class);
+
+        if (!$inspector->matches($response)) {
+            return null;
+        }
+
+        return $inspector->describe($request, $response);
+    }
+
+    /**
+     * DataTables generuoja atskirą užklausą kiekvienam lapo perėjimui,
+     * rikiavimui ir net kiekvienam paieškos simboliui. Vienas
+     * administratorius, ieškantis žmogaus, gali sugeneruoti dešimtis
+     * beveik identiškų užklausų - todėl sujungiame tas, kurios per
+     * trumpą laiką turi TĄ PATĮ URL ir tuos pačius parametrus.
+     */
+    protected function isDuplicateDataTablesRequest($request): bool
+    {
+        $window = (int) config('audit.log_page_views.datatables_dedup_seconds', 5);
+
+        if ($window <= 0) {
+            return false;
+        }
+
+        try {
+            $identity = optional(Auth::user())->getAuthIdentifier() ?? $request->ip();
+
+            // "draw" kinta kiekvienai užklausai, tad jo į raktą neimame -
+            // kitaip dedubliavimas niekada nesuveiktų.
+            $params = $request->except(['draw', '_']);
+
+            $key = 'vdu-tis-logging:dt-dedup:'.md5($identity.'|'.$request->path().'|'.serialize($params));
+
+            if (Cache::has($key)) {
+                return true;
+            }
+
+            Cache::put($key, true, $window);
+
+            return false;
+        } catch (\Throwable $e) {
+            // Cache nepasiekiamas - geriau fiksuoti (galimai dubliuotą)
+            // įrašą, nei prarasti audito duomenis.
+            return false;
+        }
     }
 
     protected function isViewableResponse($request, $response, string $path): bool
