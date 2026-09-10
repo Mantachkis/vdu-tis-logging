@@ -80,6 +80,20 @@ class MailBatchTracker
         }
 
         $this->registerFlush();
+
+        // TARPINIS ĮRAŠYMAS: nelaukiame proceso pabaigos, o įrašome
+        // suvestinę kas N laiškų.
+        //
+        // KAM TO REIKIA: masinis siuntimas sinchroniškai gali nutrūkti
+        // (PHP max_execution_time, web serverio Gateway Timeout, atminties
+        // riba) - tada register_shutdown_function gali būti neįvykdyta, ir
+        // VISI sukaupti duomenys dingtų. Auditui prarasti 80 gavėjų įrašą
+        // yra blogiau, nei turėti kelias dalines suvestines.
+        $flushEvery = (int) config('audit.mail.summary_flush_every', 50);
+
+        if ($flushEvery > 0 && $this->overflow[$key]['count'] >= $flushEvery) {
+            $this->flush();
+        }
     }
 
     protected function registerFlush(): void

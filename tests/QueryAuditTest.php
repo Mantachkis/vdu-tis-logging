@@ -4,9 +4,30 @@ namespace Vdu\TisLogging\Tests;
 
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
+use Vdu\TisLogging\Support\PendingQueryLog;
 
 class QueryAuditTest extends TestCase
 {
+    /**
+     * SQL irasai nuo v2.14.0 trumpam atidedami (zr. PendingQueryLog), kad
+     * butu galima patikrinti, ar ju nedubliuoja Eloquent mechanizmas.
+     * Testuose paskubiname ta ivertinima, kad galetume iskart skaityti
+     * zurnala.
+     */
+    protected function findLogFile(string $channel): ?string
+    {
+        app(PendingQueryLog::class)->flush();
+
+        return parent::findLogFile($channel);
+    }
+
+    protected function lastLogEntry(string $channel): array
+    {
+        app(PendingQueryLog::class)->flush();
+
+        return parent::lastLogEntry($channel);
+    }
+
     protected function setUp(): void
     {
         parent::setUp();

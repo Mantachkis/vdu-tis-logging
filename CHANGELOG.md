@@ -3,6 +3,49 @@
 Visi svarbūs paketo pakeitimai fiksuojami šiame faile.
 Versijavimas pagal [Semantic Versioning](https://semver.org/): MAJOR.MINOR.PATCH.
 
+## [2.14.0] - 2026-09-10
+
+### Pakeista (numatytoji elgsena)
+- **`AUDIT_LOG_QUERIES` dabar `true` pagal nutylėjimą.** Senesniuose projektuose
+  `DB::table()` naudojimas yra dažna praktika, o be šio mechanizmo tokie
+  pakeitimai apskritai nebūdavo fiksuojami - diegiant tekdavo apie tai atskirai
+  galvoti.
+
+### Pridėta
+- **Dubliavimosi tarp Eloquent ir SQL fiksavimo vengimas.** `$model->save()`
+  sukelia du nepriklausomus įvykius, tad iki šiol tas pats pakeitimas atsirasdavo
+  žurnale du kartus - kaip `update` ir kaip `db_update`. Dabar SQL įrašas
+  praleidžiamas, jei tos pačios lentelės pakeitimą jau užfiksavo Eloquent
+  (jo įrašas vertingesnis - turi `subject_type`, `subject_id`).
+- `PendingQueryLog` - kadangi Eloquent event'as suveikia PO SQL užklausos, SQL
+  įrašas trumpam atidedamas (buferyje laikomas ne daugiau kaip vienas įrašas,
+  įvertinamas atėjus kitai užklausai arba užklausos pabaigoje).
+- `EventLogger` priima `occurred_at` iš `$data` - atidėtų įrašų laikas
+  fiksuojamas įvykio, ne rašymo momentu, tad chronologija išlieka teisinga.
+- `EventLogger::wasTableRecordedByEloquent()` - seka, kurias lenteles Eloquent
+  jau užfiksavo per užklausą.
+- Išjungiama per `AUDIT_LOG_SKIP_ELOQUENT_DUPLICATES=false`.
+- 6 nauji testai.
+
+## [2.13.0] - 2026-09-10
+
+### Pridėta
+- **Tarpinis laiškų suvestinės rašymas.** Pastebėta realiame diegime: siunčiant
+  ~100 laiškų sinchroniškai, procesas nutrūko su Gateway Timeout, o suvestinė,
+  rašoma tik per `register_shutdown_function()`, nebuvo įvykdyta - visi sukaupti
+  ~80 gavėjų duomenys dingo.
+- Dabar suvestinė įrašoma kas `AUDIT_LOG_MAIL_SUMMARY_FLUSH` (numatytoji 50)
+  laiškų. Nutrūkus procesui prarandama tik paskutinė, nebaigta grupė, o ne
+  visi duomenys.
+- `0` = rašyti tik proceso pabaigoje (ankstesnis elgesys).
+- 2 nauji testai.
+
+### Pastaba dėl masinių siuntimų
+Gateway Timeout kyla dėl sinchroninio siuntimo HTTP užklausoje, ne dėl audito.
+Rekomenduojama naudoti `Mail::to(...)->queue(...)` - tai išsprendžia ir
+timeout'ą, ir audito pilnumą. Vartotojo kontekstas eilėje išsaugomas
+automatiškai (v2.12.0).
+
 ## [2.12.0] - 2026-09-09
 
 ### Pridėta

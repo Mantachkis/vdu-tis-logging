@@ -84,7 +84,7 @@ class InstallCommandTest extends TestCase
         // Vėliau pridėtos funkcijos - be jų diegiant naują projektą tektų
         // kintamuosius prisiminti rankomis.
         $this->assertStringContainsString('AUDIT_LOG_ALL_MODELS=true', $content);
-        $this->assertStringContainsString('AUDIT_LOG_QUERIES=false', $content);
+        $this->assertStringContainsString('AUDIT_LOG_QUERIES=true', $content);
         $this->assertStringContainsString('AUDIT_LOG_CAPTURE_OLD_VALUES=true', $content);
         $this->assertStringContainsString('AUDIT_LOG_DOWNLOADS=true', $content);
         $this->assertStringContainsString('AUDIT_LOG_PAGE_VIEWS=off', $content);

@@ -150,6 +150,10 @@ class AuditLogServiceProvider extends ServiceProvider
         // naudojamas visų to darbo metu fiksuojamų įvykių.
         $this->app->singleton(QueueContext::class);
 
+        // BŪTINA singleton - buferyje laikomas atidėtas SQL įrašas, kurį
+        // reikia įvertinti atėjus kitai užklausai.
+        $this->app->singleton(\Vdu\TisLogging\Support\PendingQueryLog::class);
+
         $this->app->alias(\Vdu\TisLogging\EventLogger::class, 'audit-log');
     }
 

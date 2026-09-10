@@ -290,4 +290,47 @@ class MailAndAutoPostTest extends TestCase
         $this->assertSame(3, substr_count($content, '"category":"mail_sent"'));
         $this->assertStringNotContainsString('"summary":true', $content);
     }
+
+    /** @test */
+    public function summaries_are_flushed_periodically_so_data_survives_a_crash()
+    {
+        // Masinis siuntimas gali nutruukti (Gateway Timeout) - tada
+        // suvestine, rasoma tik proceso pabaigoje, butu prarasta.
+        config([
+            'audit.mail.max_individual_per_request' => 2,
+            'audit.mail.summary_flush_every' => 3,
+        ]);
+
+        // 2 atskiri + 3 -> tarpine suvestine + dar 3 -> antra suvestine
+        foreach (range(1, 8) as $i) {
+            Mail::raw('Turinys', function ($message) use ($i) {
+                $message->to("gaveja{$i}@vdu.lt")->subject('Naujienlaiskis');
+            });
+        }
+
+        // SAMONINGAI nekvieciame flush() - imituojame nutruukusi procesa.
+        $content = file_get_contents($this->findLogFile('audit'));
+
+        $this->assertSame(2, substr_count($content, '"summary":true'));
+    }
+
+    /** @test */
+    public function periodic_flushing_can_be_disabled()
+    {
+        config([
+            'audit.mail.max_individual_per_request' => 1,
+            'audit.mail.summary_flush_every' => 0,
+        ]);
+
+        foreach (range(1, 5) as $i) {
+            Mail::raw('Turinys', function ($message) use ($i) {
+                $message->to("gaveja{$i}@vdu.lt")->subject('Tema');
+            });
+        }
+
+        $content = file_get_contents($this->findLogFile('audit'));
+
+        // Be tarpinio rasymo suvestines dar nera - ji butu tik pabaigoje.
+        $this->assertStringNotContainsString('"summary":true', $content);
+    }
 }

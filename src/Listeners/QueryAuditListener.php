@@ -3,8 +3,8 @@
 namespace Vdu\TisLogging\Listeners;
 
 use Illuminate\Database\Events\QueryExecuted;
-use Vdu\TisLogging\EventLogger;
 use Vdu\TisLogging\Support\OldValuesSnapshotStore;
+use Vdu\TisLogging\Support\PendingQueryLog;
 use Vdu\TisLogging\Support\SqlStatementParser;
 
 /**
@@ -51,6 +51,7 @@ class QueryAuditListener
         $rawBindings = $event->bindings;
         $parsed = app(SqlStatementParser::class)->parse($sql, $this->redactBindings($rawBindings));
 
+
         // Senos reikšmės, nuskaitytos PRIEŠ šios užklausos vykdymą.
         $snapshot = app(OldValuesSnapshotStore::class)->pull($sql, $rawBindings);
 
@@ -79,15 +80,20 @@ class QueryAuditListener
             $context['bindings'] = $this->redactBindings($rawBindings);
         }
 
-        app(EventLogger::class)->info(
-            'db_'.$statement,
-            'Duomenų bazės pakeitimas ('.strtoupper($statement).')'.($table ? ": {$table}" : ''),
-            [
+        // Įrašo NERAŠOME iš karto: Eloquent "updated" event'as suveikia PO
+        // SQL užklausos, tad dabar dar nežinome, ar to paties pakeitimo
+        // tuoj neužfiksuos modelio mechanizmas. Atidedame iki kitos
+        // užklausos (arba užklausos pabaigos) - žr. PendingQueryLog.
+        app(PendingQueryLog::class)->push($table, [
+            'category' => 'db_'.$statement,
+            'description' => 'Duomenų bazės pakeitimas ('.strtoupper($statement).')'.($table ? ": {$table}" : ''),
+            'data' => [
+                'occurred_at' => now()->toIso8601String(),
                 'old_values' => $oldValues,
                 'new_values' => $newValues,
                 'context' => $context,
-            ]
-        );
+            ],
+        ]);
     }
 
     /**

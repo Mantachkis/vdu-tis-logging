@@ -64,6 +64,18 @@ class EventLogger
      */
     protected $recordedActions = 0;
 
+    /**
+     * Lentelės, kurių pakeitimus per šią užklausą JAU užfiksavo Eloquent
+     * mechanizmas (create/update/delete su subject_type).
+     *
+     * Naudoja QueryAuditListener, kad nedubliuotų to paties pakeitimo
+     * SQL lygmeniu - kitaip $model->save() duotų DU įrašus: "update" ir
+     * "db_update".
+     *
+     * @var array<string, true>
+     */
+    protected $tablesRecordedByEloquent = [];
+
     public function __construct()
     {
         $appName = (string) config('audit.app_name', 'app');
@@ -114,7 +126,10 @@ class EventLogger
         $queue = app(QueueContext::class);
 
         $context = [
-            'occurred_at'     => now()->toIso8601String(),
+            // Atidėtiems įrašams (žr. PendingQueryLog) laikas fiksuojamas
+            // įvykio, ne rašymo momentu - kad žurnale išliktų teisinga
+            // chronologija.
+            'occurred_at'     => $data['occurred_at'] ?? now()->toIso8601String(),
             'event_type'      => $eventType,
             'category'        => $category,
             'user_id'         => $data['user_id']
@@ -137,6 +152,50 @@ class EventLogger
         if (in_array($category, self::ACTION_CATEGORIES, true)) {
             $this->recordedActions++;
         }
+
+        $this->rememberEloquentTable($category, $data);
+    }
+
+    /**
+     * Įsimena, kurią lentelę Eloquent mechanizmas ką tik užfiksavo.
+     */
+    protected function rememberEloquentTable(string $category, array $data): void
+    {
+        if (!in_array($category, ['create', 'update', 'delete'], true)) {
+            return;
+        }
+
+        $modelClass = $data['subject_type'] ?? null;
+
+        if (!$modelClass || !class_exists($modelClass)) {
+            return;
+        }
+
+        try {
+            $table = (new $modelClass())->getTable();
+
+            if ($table) {
+                $this->tablesRecordedByEloquent[strtolower($table)] = true;
+            }
+        } catch (\Throwable $e) {
+            // Modelio sukurti nepavyko (konstruktorius su argumentais ir
+            // pan.) - dubliavimo išvengti negalėsime, bet tai geriau nei
+            // sugriauti žurnalizavimą.
+        }
+    }
+
+    /**
+     * Ar šios lentelės pakeitimą per šią užklausą jau užfiksavo Eloquent.
+     *
+     * Naudoja QueryAuditListener, kad nedubliuotų to paties pakeitimo.
+     */
+    public function wasTableRecordedByEloquent(?string $table): bool
+    {
+        if (!$table) {
+            return false;
+        }
+
+        return isset($this->tablesRecordedByEloquent[strtolower($table)]);
     }
 
     /**

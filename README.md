@@ -278,10 +278,33 @@ be kontrolerių redagavimo, bet be `old_values`.
 
 ## SQL užklausų fiksavimas (`AUDIT_LOG_QUERIES`)
 
-Įjungiama per `.env`:
+**Įjungta pagal nutylėjimą**, nes senesniuose projektuose `DB::table()`
+naudojimas yra dažna praktika, o be šio mechanizmo tokie pakeitimai apskritai
+nebūtų fiksuojami.
+
 ```
-AUDIT_LOG_QUERIES=true
+AUDIT_LOG_QUERIES=true    # numatytoji
 ```
+
+### Dubliavimosi su Eloquent nėra
+
+`$model->save()` sukelia du nepriklausomus įvykius - SQL užklausą ir Eloquent
+`updated` event'ą. Paketas automatiškai praleidžia SQL įrašą, jei tos pačios
+lentelės pakeitimą per tą pačią užklausą jau užfiksavo Eloquent mechanizmas
+(jo įrašas vertingesnis - turi `subject_type`, `subject_id` ir modelio lygmens
+reikšmes).
+
+`DB::table()` pakeitimai, kurių Eloquent nemato, fiksuojami kaip anksčiau -
+būtent dėl jų šis mechanizmas ir egzistuoja.
+
+```
+AUDIT_LOG_SKIP_ELOQUENT_DUPLICATES=true    # numatytoji
+```
+
+**Techninė detalė:** kadangi Eloquent event'as suveikia PO SQL užklausos, SQL
+įrašas trumpam atidedamas - iki kitos užklausos arba užklausos pabaigos. Įrašo
+`occurred_at` fiksuojamas įvykio, ne rašymo momentu, tad chronologija išlieka
+teisinga.
 
 Fiksuoja **visas** `INSERT`/`UPDATE`/`DELETE` užklausas SQL lygmeniu,
 nepriklausomai nuo to, kaip jos sukurtos (Eloquent, `DB::table()`,
@@ -639,6 +662,27 @@ skirtingi laiškai, gausite atskirą suvestinę kiekvienai temai.
 Suvestinė rašoma per `register_shutdown_function()`, tad veikia ir CLI
 kontekste (artisan komandos, queue darbuotojai), kur jokio HTTP middleware
 nėra.
+
+**Tarpinis rašymas.** Masinis siuntimas sinchroniškai gali nutrūkti (PHP
+`max_execution_time`, web serverio Gateway Timeout, atminties riba) - tada
+suvestinė, rašoma tik proceso pabaigoje, būtų prarasta kartu su visais
+sukauptais duomenimis. Todėl suvestinė įrašoma kas `N` laiškų:
+
+```
+AUDIT_LOG_MAIL_SUMMARY_FLUSH=50    # numatytoji; 0 = tik proceso pabaigoje
+```
+
+Nutrūkus procesui prarandama tik paskutinė, nebaigta grupė.
+
+**Rekomendacija dėl masinių siuntimų.** Jei siunčiate šimtams gavėjų, geriau
+naudoti eilę - tai išsprendžia ir timeout'ą, ir audito pilnumą:
+
+```php
+Mail::to($email->email)->queue(new Newsletter($newsletter));
+```
+
+Vartotojo kontekstas eilėje išsaugomas automatiškai (žr. „Queue darbai"), tad
+žurnale ir toliau matysite, kas inicijavo siuntimą.
 
 ### Server-side DataTables - fiksuojama automatiškai
 

@@ -163,20 +163,44 @@ return [
     | kontroleriuose), įjunkite šią opciją - tada fiksuojamos VISOS
     | INSERT/UPDATE/DELETE užklausos SQL lygmeniu.
     |
-    | SVARBŪS APRIBOJIMAI:
-    | - NĖRA old_values (SQL nežino, kas buvo prieš pakeitimą - tai žino
-    |   tik iš DB įkeltas Eloquent modelis).
-    | - Nėra subject_type/subject_id modelio konteksto.
-    | - Generuoja ŽYMIAI daugiau įrašų, įskaitant dubliuotus su Eloquent
-    |   fiksavimu (tas pats pakeitimas per modelį bus užfiksuotas du kartus:
-    |   kaip "update" ir kaip "db_update").
+    | ĮJUNGTA PAGAL NUTYLĖJIMĄ, nes senesniuose projektuose DB::table()
+    | naudojimas yra dažna praktika, o be šio mechanizmo tokie pakeitimai
+    | apskritai nebūtų fiksuojami.
     |
-    | Rekomendacija: naudokite laikinai, kol pertvarkysite kontrolerius
-    | naudoti modelio instancijas ($model->save()), arba nuolat, jei
-    | pilnas SQL lygmens padengimas svarbesnis už žurnalų glaustumą.
+    | Dubliavimosi su Eloquent fiksavimu NĖRA - žr.
+    | skip_queries_recorded_by_eloquent žemiau.
+    |
+    | APRIBOJIMAS: SQL lygmens įrašuose nėra subject_type/subject_id
+    | modelio konteksto - tik lentelė ir WHERE sąlygos. old_values
+    | fiksuojamos (žr. capture_old_values).
     |
     */
-    'log_queries' => env('AUDIT_LOG_QUERIES', false),
+    'log_queries' => env('AUDIT_LOG_QUERIES', true),
+
+    /*
+    |--------------------------------------------------------------------
+    | Dubliavimosi su Eloquent fiksavimu vengimas
+    |--------------------------------------------------------------------
+    |
+    | $model->save() sukelia DU nepriklausomus įvykius: SQL užklausą ir
+    | Eloquent "updated" event'ą. Be šio mechanizmo tas pats pakeitimas
+    | atsirastų žurnale du kartus - kaip "update" ir kaip "db_update".
+    |
+    | Įjungus, SQL įrašas praleidžiamas, jei tos pačios lentelės pakeitimą
+    | per tą pačią užklausą jau užfiksavo Eloquent mechanizmas (jo įrašas
+    | vertingesnis - turi subject_type, subject_id ir modelio lygmens
+    | reikšmes).
+    |
+    | DB::table() pakeitimai, kurių Eloquent nemato, fiksuojami kaip
+    | anksčiau - būtent dėl jų SQL mechanizmas ir egzistuoja.
+    |
+    | TECHNINĖ DETALĖ: kadangi Eloquent event'as suveikia PO SQL užklausos,
+    | SQL įrašas trumpam atidedamas (iki kitos užklausos arba užklausos
+    | pabaigos). Įrašo laikas fiksuojamas įvykio, ne rašymo momentu, tad
+    | chronologija išlieka teisinga.
+    |
+    */
+    'skip_queries_recorded_by_eloquent' => env('AUDIT_LOG_SKIP_ELOQUENT_DUPLICATES', true),
 
     /*
     |--------------------------------------------------------------------
@@ -278,6 +302,19 @@ return [
         | 0 = be ribos, kiekvienas laiškas atskiru įrašu.
         */
         'max_individual_per_request' => env('AUDIT_LOG_MAIL_MAX_INDIVIDUAL', 20),
+
+        /*
+        | Kas kiek sukauptų laiškų įrašyti tarpinę suvestinę.
+        |
+        | Masinis siuntimas sinchroniškai gali nutrūkti (PHP
+        | max_execution_time, web serverio Gateway Timeout, atminties
+        | riba) - tada suvestinė, rašoma tik proceso pabaigoje, būtų
+        | prarasta kartu su visais sukauptais duomenimis.
+        |
+        | Rašant kas N laiškų, nutrūkus procesui prarandama tik paskutinė,
+        | nebaigta grupė. 0 = rašyti tik proceso pabaigoje.
+        */
+        'summary_flush_every' => env('AUDIT_LOG_MAIL_SUMMARY_FLUSH', 50),
     ],
 
     /*

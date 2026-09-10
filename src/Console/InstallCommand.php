@@ -30,7 +30,7 @@ class InstallCommand extends Command
 
             'Modeliu ir duomenu baze' => [
                 'AUDIT_LOG_ALL_MODELS' => ['true', 'Automatiskai audituoti VISUS Eloquent modelius'],
-                'AUDIT_LOG_QUERIES' => ['false', 'Fiksuoti SQL uzklausas, apeinancias Eloquent (DB::table)'],
+                'AUDIT_LOG_QUERIES' => ['true', 'Fiksuoti SQL uzklausas, apeinancias Eloquent (DB::table)'],
                 'AUDIT_LOG_QUEUE_CONTEXT' => ['true', 'Perkelti vartotojo kontesta i queue darbus'],
                 'AUDIT_LOG_CAPTURE_OLD_VALUES' => ['true', 'Nuskaityti senas reiksmes pries UPDATE/DELETE'],
                 'AUDIT_LOG_OLD_VALUES_MAX_ROWS' => ['5', 'Riba masiniams atnaujinimams'],
@@ -50,6 +50,7 @@ class InstallCommand extends Command
                 'AUDIT_LOG_MAIL' => ['true', 'Fiksuoti issiustus el. laiskus'],
                 'AUDIT_LOG_MAIL_MAX_RECIPIENTS' => ['0', 'Gaveju sarasas zurnale (0 = visi)'],
                 'AUDIT_LOG_MAIL_MAX_INDIVIDUAL' => ['20', 'Kiek laisku fiksuoti atskirai, toliau - suvestine'],
+                'AUDIT_LOG_MAIL_SUMMARY_FLUSH' => ['50', 'Kas kiek laisku irasyti tarpine suvestine'],
             ],
 
             'Klientines puses ivykiai' => [
