@@ -15,7 +15,13 @@ class ModelAuditRecorder
 {
     public function recordCreated($model): void
     {
-        $this->record('create', $model, null, $this->filter($model, $model->getAttributes()));
+        $values = $this->filter($model, $model->getAttributes());
+
+        if (empty($values)) {
+            return;
+        }
+
+        $this->record('create', $model, null, $values);
     }
 
     public function recordUpdated($model): void
@@ -23,6 +29,14 @@ class ModelAuditRecorder
         $changes = $model->getChanges();
 
         if (empty($changes)) {
+            return;
+        }
+
+        // Jei pasikeitė TIK jautrūs laukai (slaptažodis, remember_token),
+        // po filtravimo neliks ko rodyti - fiksuotume "kažkas pasikeitė",
+        // nenurodydami ką. Toks įrašas beprasmis, o dažnas (pvz. Laravel
+        // atsijungiant išvalo remember_token) - tik triukšmas žurnale.
+        if (empty($this->filter($model, $changes))) {
             return;
         }
 

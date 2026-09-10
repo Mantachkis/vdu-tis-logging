@@ -135,8 +135,24 @@ class SqlStatementParser
         return $result;
     }
 
+    /**
+     * Nuvalo identifikatoriaus skirtukus ir schemos prefiksą.
+     *
+     * Oracle (ir kai kurie kiti) lentelės vardą pateikia su schema:
+     * "LUADM"."SSO_USERS". Paliekame tik patį lentelės vardą - kitaip
+     * jis nesutaptų su Eloquent modelio getTable() reikšme, ir
+     * dubliavimosi vengimas nesuveiktų.
+     */
     protected function unquote(string $identifier): string
     {
-        return trim($identifier, '`"[] ');
+        $identifier = trim($identifier, '`"[] ');
+
+        // Schemos prefiksas: LUADM"."SSO_USERS arba schema.table
+        if (strpos($identifier, '.') !== false) {
+            $parts = preg_split('/["`\]\[]*\.["`\]\[]*/', $identifier);
+            $identifier = trim((string) end($parts), '`"[] ');
+        }
+
+        return $identifier;
     }
 }

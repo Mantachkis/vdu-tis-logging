@@ -89,4 +89,33 @@ class SqlStatementParserTest extends TestCase
         $this->assertNull($result['table']);
         $this->assertNull($result['values']);
     }
+
+    /** @test */
+    public function it_strips_the_oracle_schema_prefix_from_the_table_name()
+    {
+        // Oracle lenteles varda pateikia su schema: "LUADM"."SSO_USERS".
+        // Be prefikso salinimo jis nesutaptu su Eloquent getTable()
+        // reiksme, ir dubliavimosi vengimas nesuveiktu.
+        $sql = 'update "LUADM"."SSO_USERS" set "REMEMBER_TOKEN" = ? where "ID" = ?';
+
+        $result = $this->parser()->parse($sql, ['raktas', 33131]);
+
+        $this->assertSame('SSO_USERS', $result['table']);
+    }
+
+    /** @test */
+    public function it_strips_a_plain_schema_prefix_too()
+    {
+        $result = $this->parser()->parse('delete from myschema.news where "id" = ?', [7]);
+
+        $this->assertSame('news', $result['table']);
+    }
+
+    /** @test */
+    public function a_table_without_schema_prefix_is_unchanged()
+    {
+        $result = $this->parser()->parse('insert into "users" ("name") values (?)', ['Jonas']);
+
+        $this->assertSame('users', $result['table']);
+    }
 }

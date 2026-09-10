@@ -57,9 +57,20 @@ class QueryAuditListener
 
         [$oldValues, $newValues] = $this->resolveChanges($statement, $parsed['values'], $snapshot);
 
-        // Jei UPDATE nieko realiai nepakeitė (visi laukai perrašyti tomis
-        // pačiomis reikšmėmis), nefiksuojame - tai ne pakeitimas.
-        if ($statement === 'update' && $newValues !== null && empty($newValues)) {
+        // Jautrūs laukai (slaptažodžiai, remember_token, asmens kodas)
+        // šalinami IR SQL lygmenyje. Iki v2.15.0 config('audit.exclude')
+        // buvo taikomas tik Eloquent mechanizmui, tad per DB::table()
+        // atlikti pakeitimai galėjo atskleisti, pvz., remember_token -
+        // raktą, leidžiantį prisijungti kaip tas vartotojas.
+        $oldValues = $this->excludeSensitiveFields($oldValues);
+        $newValues = $this->excludeSensitiveFields($newValues);
+        $parsed['conditions'] = $this->excludeSensitiveFields($parsed['conditions']);
+
+        // Jei po jautrių laukų pašalinimo nieko neliko, įrašas beprasmis -
+        // fiksuotume "kažkas pasikeitė", nenurodydami ką. Pats pakeitimo
+        // faktas jautriame lauke (pvz. slaptažodžio keitimas) turi būti
+        // fiksuojamas atskirai, per projekto kodą.
+        if (in_array($statement, ['update', 'insert'], true) && empty($newValues)) {
             return;
         }
 
@@ -171,6 +182,31 @@ class QueryAuditListener
         }, $snapshot);
 
         return count($rows) === 1 ? $rows[0] : $rows;
+    }
+
+    /**
+     * Pašalina jautrius laukus pagal config('audit.exclude').
+     *
+     * Palyginimas be raidžių registro, nes Oracle stulpelius grąžina
+     * DIDŽIOSIOMIS (REMEMBER_TOKEN), o sąraše jie rašomi mažosiomis.
+     */
+    protected function excludeSensitiveFields(?array $values): ?array
+    {
+        if (empty($values)) {
+            return $values;
+        }
+
+        $excluded = array_map('strtolower', (array) config('audit.exclude', []));
+
+        $filtered = [];
+
+        foreach ($values as $column => $value) {
+            if (!in_array(strtolower((string) $column), $excluded, true)) {
+                $filtered[$column] = $value;
+            }
+        }
+
+        return $filtered;
     }
 
     protected function isExcludedTable(string $sql): bool

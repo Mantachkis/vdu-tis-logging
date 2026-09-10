@@ -3,6 +3,31 @@
 Visi svarbūs paketo pakeitimai fiksuojami šiame faile.
 Versijavimas pagal [Semantic Versioning](https://semver.org/): MAJOR.MINOR.PATCH.
 
+## [2.15.0] - 2026-09-10
+
+### Pataisyta (saugumo spraga)
+- **`remember_token` ir kiti jautrūs laukai patekdavo į žurnalą per SQL
+  mechanizmą.** `config('audit.exclude')` sąrašas buvo taikomas TIK Eloquent
+  keliui, tad `DB::table()` pakeitimai (arba Laravel vidinis
+  `remember_token` išvalymas atsijungiant) atskleisdavo raktą, leidžiantį
+  prisijungti kaip tas vartotojas. Pastebėta realiame diegime.
+- Filtravimas dabar taikomas ir SQL lygmens `old_values`, `new_values` bei
+  `conditions` laukams. Palyginimas be raidžių registro - Oracle stulpelius
+  grąžina DIDŽIOSIOMIS (`REMEMBER_TOKEN`), o sąraše jie rašomi mažosiomis.
+
+### Pataisyta
+- **Oracle schemos prefiksas lentelės varde.** `"LUADM"."SSO_USERS"` buvo
+  atpažįstama kaip `LUADM"."SSO_USERS`, tad nesutapdavo su Eloquent modelio
+  `getTable()` reikšme ir dubliavimosi vengimas (v2.14.0) nesuveikdavo.
+  Dabar schemos prefiksas pašalinamas.
+- **Tušti įrašai nebefiksuojami.** Jei po jautrių laukų pašalinimo
+  `new_values` lieka tuščias, įrašas praleidžiamas - fiksuoti „kažkas
+  pasikeitė", nenurodant ko, yra beprasmis triukšmas. Dažnas atvejis:
+  Laravel atsijungiant išvalo `remember_token`.
+
+### Pridėta
+- 10 naujų testų.
+
 ## [2.14.0] - 2026-09-10
 
 ### Pakeista (numatytoji elgsena)
