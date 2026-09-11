@@ -32,6 +32,7 @@ class InstallCommand extends Command
                 'AUDIT_LOG_ALL_MODELS' => ['true', 'Automatiskai audituoti VISUS Eloquent modelius'],
                 'AUDIT_LOG_QUERIES' => ['true', 'Fiksuoti SQL uzklausas, apeinancias Eloquent (DB::table)'],
                 'AUDIT_LOG_QUEUE_CONTEXT' => ['true', 'Perkelti vartotojo kontesta i queue darbus'],
+                'AUDIT_LOG_EXCEPTIONS' => ['true', 'Fiksuoti nepagautas PHP klaidas'],
                 'AUDIT_LOG_CAPTURE_OLD_VALUES' => ['true', 'Nuskaityti senas reiksmes pries UPDATE/DELETE'],
                 'AUDIT_LOG_OLD_VALUES_MAX_ROWS' => ['5', 'Riba masiniams atnaujinimams'],
                 'AUDIT_LOG_MAX_BINDING_LENGTH' => ['500', 'Maks. reiksmes ilgis zurnale'],
@@ -196,10 +197,7 @@ class InstallCommand extends Command
         $this->line('  AUDIT_LOG_CLIENT_EVENTS=true   - naršyklėje vykstantys veiksmai (SheetJS)');
         $this->line('');
         $this->line('REIKIA RANKINIO KODO:');
-        $this->line('  1. app/Exceptions/Handler.php - sisteminių klaidų fiksavimui:');
-        $this->line('     use Vdu\TisLogging\Traits\LogsExceptions;');
-        $this->line('     public function report(Throwable $e) { $this->logException($e); parent::report($e); }');
-        $this->line('');
+                $this->line('');
         $this->line('  2. Jei projektas naudoja custom auth (SSO, rankinis guard->login()),');
         $this->line('     nepavykę prisijungimai NEBUS fiksuojami automatiškai - reikia');
         $this->line('     AuditLog::security(...) kvietimo login kontroleryje. Žr. README.');

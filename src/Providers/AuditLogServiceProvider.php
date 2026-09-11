@@ -5,6 +5,7 @@ namespace Vdu\TisLogging\Providers;
 use Illuminate\Auth\Events\Failed;
 use Illuminate\Auth\Events\Login;
 use Illuminate\Auth\Events\Logout;
+use Illuminate\Contracts\Debug\ExceptionHandler as ExceptionHandlerContract;
 use Illuminate\Contracts\Http\Kernel;
 use Illuminate\Database\Connection;
 use Illuminate\Database\Events\QueryExecuted;
@@ -14,6 +15,8 @@ use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\ServiceProvider;
 use Vdu\TisLogging\Console\InstallCommand;
+use Vdu\TisLogging\Exceptions\AuditingExceptionHandler;
+use Vdu\TisLogging\Exceptions\AuditingExceptionHandlerLegacy;
 use Vdu\TisLogging\Http\Middleware\LogFileDownloads;
 use Vdu\TisLogging\Http\Middleware\LogPageViews;
 use Vdu\TisLogging\Listeners\GlobalModelAuditListener;
@@ -155,6 +158,71 @@ class AuditLogServiceProvider extends ServiceProvider
         $this->app->singleton(\Vdu\TisLogging\Support\PendingQueryLog::class);
 
         $this->app->alias(\Vdu\TisLogging\EventLogger::class, 'audit-log');
+
+        $this->decorateExceptionHandler();
+    }
+
+    /**
+     * Apgaubia projekto App\Exceptions\Handler, kad nepagautos išimtys
+     * būtų fiksuojamos AUTOMATIŠKAI - be Handler.php redagavimo.
+     *
+     * Laravel neturi event'o nepagautoms išimtims, bet handler'is yra
+     * konteineryje, tad jį galima apgaubti - originalus objektas išlieka
+     * ir toliau atlieka visą savo darbą, o mes tik pridedame audito įrašą.
+     *
+     * VERSIJŲ NIUANSAS: ExceptionHandler sutartis Laravel 5.7-7.x naudoja
+     * `Exception` tipą, o 8.x+ - `Throwable`. PHP 7.1 neleidžia praplėsti
+     * parametro tipo implementuojant sąsają, tad turime dvi klases ir
+     * renkamės pagal realią sutarties signatūrą.
+     */
+    protected function decorateExceptionHandler(): void
+    {
+        if (!config('audit.log_exceptions', true)) {
+            return;
+        }
+
+        $this->app->extend(ExceptionHandlerContract::class, function ($handler) {
+            try {
+                // Apsauga nuo dvigubo apgaubimo (pvz. jei provider'is
+                // kažkodėl užregistruojamas du kartus).
+                if ($handler instanceof AuditingExceptionHandler
+                    || $handler instanceof AuditingExceptionHandlerLegacy) {
+                    return $handler;
+                }
+
+                $class = $this->usesThrowableContract()
+                    ? AuditingExceptionHandler::class
+                    : AuditingExceptionHandlerLegacy::class;
+
+                return new $class($handler);
+            } catch (\Throwable $e) {
+                // Nepavykus apgaubti - grąžiname originalų handler'į.
+                // Klaidų apdorojimas svarbiau už jų auditavimą.
+                return $handler;
+            }
+        });
+    }
+
+    /**
+     * Ar ExceptionHandler sutartis naudoja Throwable (Laravel 8+).
+     */
+    protected function usesThrowableContract(): bool
+    {
+        try {
+            $method = new \ReflectionMethod(ExceptionHandlerContract::class, 'report');
+            $params = $method->getParameters();
+
+            if (empty($params) || !$params[0]->hasType()) {
+                return true;
+            }
+
+            $type = $params[0]->getType();
+            $name = method_exists($type, 'getName') ? $type->getName() : (string) $type;
+
+            return $name === 'Throwable';
+        } catch (\Throwable $e) {
+            return true;
+        }
     }
 
     /**

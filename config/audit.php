@@ -112,6 +112,29 @@ return [
 
     /*
     |--------------------------------------------------------------------
+    | Nepagautų išimčių fiksavimas
+    |--------------------------------------------------------------------
+    |
+    | Laravel neturi event'o nepagautoms išimtims, bet ExceptionHandler
+    | yra konteineryje - tad paketas jį apgaubia AUTOMATIŠKAI. Projekto
+    | app/Exceptions/Handler.php redaguoti NEREIKIA.
+    |
+    | Originalus handler'is išlieka ir toliau atlieka visą savo darbą
+    | (render, dontReport sąrašas, custom logika) - paketas tik prideda
+    | audito įrašą prieš perduodamas jam valdymą.
+    |
+    | Gerbiamas projekto $dontReport sąrašas: validacijos/404 klaidos,
+    | kurias Laravel numatytai nutildo, į auditą nepatenka.
+    |
+    | Stack trace SĄMONINGAI neįtraukiamas - jame yra funkcijų argumentai,
+    | kuriuose gali būti slaptažodžių ar tokenų. Loginami tik failas ir
+    | eilutė; pilną trace rasite storage/logs/laravel.log.
+    |
+    */
+    'log_exceptions' => env('AUDIT_LOG_EXCEPTIONS', true),
+
+    /*
+    |--------------------------------------------------------------------
     | Automatinis VISŲ Eloquent modelių audito fiksavimas
     |--------------------------------------------------------------------
     |

@@ -790,37 +790,32 @@ class InvoiceController extends Controller
 }
 ```
 
-## Klaidos/išimtys - `LogsExceptions` trait
+## Klaidos/išimtys - automatiškai
 
-Laravel neturi standartinio event'o nepagautoms išimtims (skirtingai nuo
-Login/Logout/Failed), tad automatinis `error` tipo įvykių fiksavimas reikalauja
-vieno papildomo žingsnio projekto `app/Exceptions/Handler.php` faile:
+**Nereikia jokio `Handler.php` redagavimo.** Laravel neturi event'o
+nepagautoms išimtims, bet `ExceptionHandler` yra konteineryje - paketas jį
+apgaubia automatiškai. Originalus handler'is išlieka ir toliau atlieka visą
+savo darbą; paketas tik prideda audito įrašą.
 
-```php
-use Vdu\TisLogging\Traits\LogsExceptions;
+Visos nepagautos išimtys (500 klaidos ir pan.) patenka į
+`error/error-YYYY-MM-DD.log` su kategorija `exception`.
 
-class Handler extends ExceptionHandler
-{
-    use LogsExceptions;
+Gerbiamas projekto `$dontReport` sąrašas - validacijos/404 klaidos, kurias
+Laravel numatytai nutildo, į auditą nepatenka.
 
-    public function report(Throwable $exception)
-    {
-        $this->logException($exception);
-        parent::report($exception);
-    }
-}
+```
+AUDIT_LOG_EXCEPTIONS=true    # numatytoji
 ```
 
-Po šio vieno papildymo, **visos** projekto nepagautos išimtys (500 klaidos ir pan.)
-automatiškai pateks į `error/error-YYYY-MM-DD.log`, su išimties klase, žinute,
-failu ir eilute. Gerbiamas projekto esamas `$dontReport` sąrašas (jei apibrėžtas)
-- validacijos/404 klaidos, kurias Laravel numatytai nutildo, taip pat nepateks
-į audito žurnalą kaip "error" įvykiai.
+**Saugumo pastaba:** stack trace sąmoningai neįtraukiamas - jame yra funkcijų
+argumentai, kuriuose gali būti slaptažodžių ar tokenų. Loginami tik failas ir
+eilutė; pilną trace rasite `storage/logs/laravel.log`.
 
-**Saugumo pastaba:** pilnas stack trace su funkcijų argumentais SĄMONINGAI
-neįtraukiamas (gali turėti slaptažodžių/tokenų) - loginami tik failas ir eilutė.
-Pilną trace rasite standartiniame `storage/logs/laravel.log`, jei reikės detalesnei
-diagnostikai.
+### `LogsExceptions` trait (nebereikalingas)
+
+Iki v2.16.0 reikėjo rankinio papildymo. Trait'as palaikomas dėl suderinamumo,
+bet naujuose projektuose jo nereikia - jei jį naudosite kartu su automatiniu
+apgaubimu, gausite dubliuotus įrašus.
 
 ## Failų atsisiuntimai - automatinis middleware
 

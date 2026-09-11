@@ -3,6 +3,27 @@
 Visi svarbūs paketo pakeitimai fiksuojami šiame faile.
 Versijavimas pagal [Semantic Versioning](https://semver.org/): MAJOR.MINOR.PATCH.
 
+## [2.16.0] - 2026-09-10
+
+### Pridėta
+- **Nepagautos išimtys fiksuojamos AUTOMATIŠKAI** - projekto
+  `app/Exceptions/Handler.php` redaguoti nebereikia. Laravel neturi event'o
+  išimtims, bet `ExceptionHandler` yra konteineryje, tad paketas jį apgaubia
+  per `app()->extend()`. Originalus handler'is išlieka ir toliau atlieka visą
+  savo darbą (render, `$dontReport`, custom logika).
+- Dvi apvalkalų versijos: `ExceptionHandler` sutartis Laravel 5.7-7.x naudoja
+  `Exception`, o 8.x+ - `Throwable`, o PHP 7.1 neleidžia praplėsti parametro
+  tipo implementuojant sąsają. Versija parenkama per refleksiją vykdymo metu.
+- Nepavykus apgaubti, grąžinamas originalus handler'is - klaidų apdorojimas
+  svarbiau už jų auditavimą.
+- Išjungiama per `AUDIT_LOG_EXCEPTIONS=false`.
+- 7 nauji testai.
+
+### Pastaba
+`LogsExceptions` trait palaikomas dėl suderinamumo, bet naujuose projektuose
+nereikalingas. Naudojant kartu su automatiniu apgaubimu, gausite dubliuotus
+įrašus - pašalinkite trait'ą iš `Handler.php`.
+
 ## [2.15.0] - 2026-09-10
 
 ### Pataisyta (saugumo spraga)
