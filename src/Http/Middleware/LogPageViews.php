@@ -90,6 +90,7 @@ class LogPageViews
         }
 
         $route = $request->route();
+        $queryParams = $this->auditedQueryParams($request);
 
         $context = [
             'url' => $request->fullUrl(),
@@ -97,6 +98,10 @@ class LogPageViews
             'route_name' => $route ? $route->getName() : null,
             'route_params' => $route ? $this->scalarParams($route) : [],
         ];
+
+        if (!empty($queryParams)) {
+            $context['query_params'] = $queryParams;
+        }
 
         $description = 'Peržiūrėtas puslapis: /'.$path;
 
@@ -110,11 +115,68 @@ class LogPageViews
             $description,
             [
                 // Route parametrai (pvz. {id}) - tai dažniausiai ir yra
-                // konkretaus peržiūrėto įrašo identifikatorius.
-                'subject_id' => $this->resolveSubjectId($route),
+                // konkretaus peržiūrėto įrašo identifikatorius. Jei jų nėra,
+                // bandome query parametrus (AJAX dažnai naudoja ?id=123).
+                'subject_id' => $this->resolveSubjectId($route) ?? $this->subjectIdFromQuery($queryParams),
                 'context' => $context,
             ]
         );
+    }
+
+    /**
+     * Surenka query parametrus, kuriuos verta fiksuoti.
+     *
+     * KAM TO REIKIA: AJAX užklausos dažnai perduoda peržiūrimo įrašo ID
+     * kaip query parametrą, ne route parametrą:
+     *
+     *     $.ajax({ url: "/userApplicationAnswers/", data: { masterInfoId: 123 } })
+     *
+     * Be jų žurnale matytųsi tik "peržiūrėjo /userApplicationAnswers", bet
+     * ne KIENO duomenis peržiūrėjo - o auditui būtent tai ir svarbu.
+     *
+     * Fiksuojami TIK config('audit.log_page_views.query_params') sąraše
+     * išvardinti parametrai - kitaip į žurnalą patektų filtrai, puslapiavimas,
+     * paieškos frazės ir kitas triukšmas, o kartais ir jautrūs duomenys.
+     */
+    protected function auditedQueryParams($request): array
+    {
+        $allowed = config('audit.log_page_views.query_params', []);
+
+        if (empty($allowed)) {
+            return [];
+        }
+
+        $collected = [];
+
+        foreach ($request->query() as $key => $value) {
+            if (!is_scalar($value)) {
+                continue;
+            }
+
+            foreach ($allowed as $pattern) {
+                if (Str::is($pattern, $key)) {
+                    $collected[$key] = mb_substr((string) $value, 0, 200);
+                    break;
+                }
+            }
+        }
+
+        return $collected;
+    }
+
+    /**
+     * Iš surinktų query parametrų parenka tą, kuris labiausiai panašus į
+     * peržiūrėto įrašo identifikatorių - pirmą skaitinį.
+     */
+    protected function subjectIdFromQuery(array $queryParams)
+    {
+        foreach ($queryParams as $value) {
+            if (is_numeric($value)) {
+                return $value;
+            }
+        }
+
+        return null;
     }
 
     /**

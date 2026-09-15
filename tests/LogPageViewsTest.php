@@ -249,4 +249,147 @@ class LogPageViewsTest extends TestCase
 
         $this->assertNull($this->findLogFile('audit'));
     }
+
+    /** @test */
+    public function query_params_are_logged_when_listed()
+    {
+        // AJAX su ?masterInfoId=123 - be sio mechanizmo zurnale matytusi
+        // tik "perziurejo puslapi", bet ne KIENO duomenis.
+        config([
+            'audit.log_page_views.mode' => 'all',
+            'audit.log_page_views.query_params' => ['masterInfoId'],
+        ]);
+
+        $this->pass($this->middleware(), Request::create('/userApplicationAnswers', 'GET', [
+            'masterInfoId' => '123',
+            'program' => 'ABC',
+        ]));
+
+        $decoded = $this->lastLogEntry('audit');
+
+        $this->assertSame('123', $decoded['context']['context']['query_params']['masterInfoId']);
+        // "program" nera sarase - neturi patekti.
+        $this->assertArrayNotHasKey('program', $decoded['context']['context']['query_params']);
+    }
+
+    /** @test */
+    public function a_numeric_query_param_becomes_the_subject_id()
+    {
+        config([
+            'audit.log_page_views.mode' => 'all',
+            'audit.log_page_views.query_params' => ['masterInfoId'],
+        ]);
+
+        $this->pass($this->middleware(), Request::create('/userApplicationAnswers', 'GET', [
+            'masterInfoId' => '456',
+        ]));
+
+        $decoded = $this->lastLogEntry('audit');
+
+        $this->assertSame('456', $decoded['context']['subject_id']);
+    }
+
+    /** @test */
+    public function query_params_support_wildcards()
+    {
+        config([
+            'audit.log_page_views.mode' => 'all',
+            'audit.log_page_views.query_params' => ['*_id'],
+        ]);
+
+        $this->pass($this->middleware(), Request::create('/perziura', 'GET', [
+            'user_id' => '77',
+            'filtras' => 'aktyvus',
+        ]));
+
+        $decoded = $this->lastLogEntry('audit');
+
+        $this->assertSame('77', $decoded['context']['context']['query_params']['user_id']);
+        $this->assertArrayNotHasKey('filtras', $decoded['context']['context']['query_params']);
+    }
+
+    /** @test */
+    public function nothing_is_collected_when_the_list_is_empty()
+    {
+        config([
+            'audit.log_page_views.mode' => 'all',
+            'audit.log_page_views.query_params' => [],
+        ]);
+
+        $this->pass($this->middleware(), Request::create('/perziura', 'GET', ['id' => '9']));
+
+        $decoded = $this->lastLogEntry('audit');
+
+        $this->assertArrayNotHasKey('query_params', $decoded['context']['context']);
+    }
+
+    /** @test */
+    public function default_patterns_catch_common_id_parameter_names()
+    {
+        // Numatytieji sablonai turi apimti dauguma Laravel projektu, kad
+        // diegiant nereiketu vardinti kiekvieno parametro atskirai.
+        config(['audit.log_page_views.mode' => 'all']);
+
+        $this->pass($this->middleware(), Request::create('/perziura', 'GET', [
+            'masterInfoId' => '123',
+            'user_id' => '45',
+            'id' => '7',
+            'filtras' => 'aktyvus',
+            'page' => '2',
+        ]));
+
+        $decoded = $this->lastLogEntry('audit');
+        $collected = $decoded['context']['context']['query_params'];
+
+        $this->assertSame('123', $collected['masterInfoId']);
+        $this->assertSame('45', $collected['user_id']);
+        $this->assertSame('7', $collected['id']);
+
+        // Triuksmas nepatenka.
+        $this->assertArrayNotHasKey('filtras', $collected);
+        $this->assertArrayNotHasKey('page', $collected);
+    }
+
+    /** @test */
+    public function ckods_is_collected_by_default()
+    {
+        // VDU sistemose ckods (darbuotojo kodas) daznai naudojamas kaip
+        // identifikatorius. Tai NE asmens kodas - jis blokuojamas atskirai.
+        config(['audit.log_page_views.mode' => 'all']);
+
+        $this->pass($this->middleware(), Request::create('/perziura', 'GET', [
+            'ckods' => '78935',
+            'cilveks_ckods' => '12345',
+        ]));
+
+        $decoded = $this->lastLogEntry('audit');
+        $collected = $decoded['context']['context']['query_params'];
+
+        $this->assertSame('78935', $collected['ckods']);
+        $this->assertSame('12345', $collected['cilveks_ckods']);
+        $this->assertSame('78935', $decoded['context']['subject_id']);
+    }
+
+    /** @test */
+    public function route_params_take_precedence_over_query_params_for_subject_id()
+    {
+        config([
+            'audit.log_page_views.mode' => 'all',
+            'audit.log_page_views.query_params' => ['id'],
+        ]);
+
+        // Route parametras tikslesnis nei query - jis turi pirmenybe.
+        $request = Request::create('/irasas/999', 'GET', ['id' => '111']);
+        $route = new \Illuminate\Routing\Route(['GET'], '/irasas/{irasas}', []);
+        $route->bind($request);
+        $request->setRouteResolver(function () use ($route) {
+            return $route;
+        });
+
+        $this->pass($this->middleware(), $request);
+
+        $decoded = $this->lastLogEntry('audit');
+
+        $this->assertSame('999', $decoded['context']['subject_id']);
+    }
 }

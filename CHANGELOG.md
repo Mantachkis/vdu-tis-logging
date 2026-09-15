@@ -3,6 +3,25 @@
 Visi svarbūs paketo pakeitimai fiksuojami šiame faile.
 Versijavimas pagal [Semantic Versioning](https://semver.org/): MAJOR.MINOR.PATCH.
 
+## [2.17.0] - 2026-09-14
+
+### Pridėta
+- **Query parametrų fiksavimas peržiūrose.** AJAX užklausos dažnai perduoda
+  peržiūrimo įrašo ID kaip query parametrą (`?masterInfoId=123`), ne route
+  parametrą - tokiu atveju žurnale matydavosi tik „peržiūrėjo puslapį", bet
+  ne KIENO duomenis. Pastebėta realiame diegime.
+- `config('audit.log_page_views.query_params')` - baltasis sąrašas su `*`
+  šablonų palaikymu. Numatytieji šablonai `['id', '*Id', '*_id', 'ckods',
+  '*_ckods']` apima daugumą VDU projektų - ID parametrai beveik visada
+  baigiasi `Id` arba `_id`, o `ckods` (darbuotojo kodas) yra dažnas
+  identifikatorius VDU sistemose. Diegiant nereikia vardinti kiekvieno
+  parametro atskirai.
+- Fiksuojami tik sąraše esantys parametrai - kitaip į žurnalą patektų filtrai,
+  puslapiavimas, paieškos frazės ir galimai jautrūs duomenys.
+- Pirmas skaitinis rastas parametras tampa `subject_id`. Route parametrai
+  išlaiko pirmenybę - jie tikslesni.
+- 5 nauji testai.
+
 ## [2.16.0] - 2026-09-10
 
 ### Pridėta

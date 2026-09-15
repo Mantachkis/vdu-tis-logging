@@ -531,6 +531,47 @@ return [
         ],
 
         /*
+        | Query parametrai, kuriuos fiksuoti
+        |
+        | AJAX uzklausos daznai perduoda perziurimo iraso ID kaip query
+        | parametra, ne route parametra:
+        |
+        |     $.ajax({ url: "/userApplicationAnswers/", data: { masterInfoId: 123 } })
+        |
+        | Be ju zurnale matytusi tik "perziurejo /userApplicationAnswers",
+        | bet ne KIENO duomenis perziurejo - o auditui butent tai ir svarbu.
+        |
+        | Palaiko "*" sablonus. Pirmas skaitinis rastas parametras
+        | naudojamas kaip subject_id.
+        |
+        | NUMATYTIEJI SABLONAI apima dauguma Laravel projektu, nes ID
+        | parametrai beveik visada baigiasi "Id" arba "_id":
+        | masterInfoId, userId, applicationId, user_id, person_id...
+        |
+        | Itrauktas ir "ckods" - VDU sistemose tai darbuotojo kodas,
+        | daznai naudojamas kaip identifikatorius. Tai NE asmens kodas
+        | (pers_code blokuojamas globaliai), tad auditui naudingas.
+        |
+        | Netipinius atvejus (pvz. 'nr', 'kodas') pridekite atskirai.
+        | Rasti juos galima taip:
+        |
+        |   grep -rhno "data: *{[^}]*}" resources/views/ \
+        |     | grep -o '"\?[a-zA-Z_]*[Ii][Dd]"\?' | sort -u
+        |
+        | SVARBU: fiksuojami TIK cia isvardinti parametrai. Fiksuoti visus
+        | butu bloga mintis - i zurnala patektu filtrai, puslapiavimas,
+        | paieskos frazes, o kartais ir jautrus duomenys (pvz. tokenai
+        | nuorodose).
+        */
+        'query_params' => [
+            'id',
+            '*Id',
+            '*_id',
+            'ckods',
+            '*_ckods',
+        ],
+
+        /*
         | Automatinis server-side DataTables aptikimas
         |
         | Kai lentelė pildoma per AJAX (yajra/laravel-datatables serverSide

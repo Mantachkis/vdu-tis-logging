@@ -684,6 +684,54 @@ Mail::to($email->email)->queue(new Newsletter($newsletter));
 Vartotojo kontekstas eilėje išsaugomas automatiškai (žr. „Queue darbai"), tad
 žurnale ir toliau matysite, kas inicijavo siuntimą.
 
+### AJAX su ID query parametre
+
+AJAX užklausos dažnai perduoda peržiūrimo įrašo ID kaip query parametrą:
+
+```js
+$.ajax({ url: "/userApplicationAnswers/", data: { masterInfoId: 123 } })
+```
+
+Numatytieji šablonai tai jau apima - nieko konfigūruoti nereikia:
+
+```php
+'query_params' => [
+    'id',
+    '*Id',        // masterInfoId, userId, applicationId...
+    '*_id',       // user_id, person_id...
+    'ckods',      // VDU darbuotojo kodas
+    '*_ckods',    // cilveks_ckods...
+],
+```
+
+ID parametrai Laravel projektuose beveik visada baigiasi `Id` arba `_id`, o
+VDU sistemose dažnas identifikatorius yra `ckods` (darbuotojo kodas, ne asmens
+kodas - pastarasis blokuojamas globaliai). Netipinius (`nr`, `kodas`)
+pridėkite atskirai.
+
+Rezultatas:
+
+```json
+{
+  "subject_id": "123",
+  "context": {
+    "query_params": {"masterInfoId": "123"}
+  }
+}
+```
+
+Pirmas skaitinis rastas parametras tampa `subject_id`. Route parametrai turi
+pirmenybę - jie tikslesni.
+
+**Kodėl ne visi parametrai:** į žurnalą patektų filtrai, puslapiavimas,
+paieškos frazės, o kartais ir jautrūs duomenys (tokenai nuorodose).
+
+Netipinius parametrus konkrečiame projekte rasite taip:
+
+```bash
+grep -rhno "data: *{[^}]*}" resources/views/ | grep -o '"\?[a-zA-Z_]*[Ii][Dd]"\?' | sort -u
+```
+
 ### Server-side DataTables - fiksuojama automatiškai
 
 Kai lentelė pildoma per AJAX (`yajra/laravel-datatables` `serverSide` režimu),
