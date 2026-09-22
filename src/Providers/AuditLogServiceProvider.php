@@ -17,6 +17,7 @@ use Illuminate\Support\ServiceProvider;
 use Vdu\TisLogging\Console\InstallCommand;
 use Vdu\TisLogging\Exceptions\AuditingExceptionHandler;
 use Vdu\TisLogging\Exceptions\AuditingExceptionHandlerLegacy;
+use Vdu\TisLogging\Http\Middleware\LogFailedLogins;
 use Vdu\TisLogging\Http\Middleware\LogFileDownloads;
 use Vdu\TisLogging\Http\Middleware\LogPageViews;
 use Vdu\TisLogging\Listeners\GlobalModelAuditListener;
@@ -124,6 +125,13 @@ class AuditLogServiceProvider extends ServiceProvider
 
             if (config('audit.log_page_views.mode', 'off') !== 'off') {
                 $kernel->pushMiddleware(LogPageViews::class);
+            }
+
+            // Nepavykę prisijungimai - automatiškai, be LoginController
+            // redagavimo. SSO brokeriai nenaudoja Auth::attempt(), tad
+            // Laravel Failed event'as juose nesuveikia.
+            if (config('audit.detect_failed_logins', true)) {
+                $kernel->pushMiddleware(LogFailedLogins::class);
             }
         }
     }

@@ -33,6 +33,7 @@ class InstallCommand extends Command
                 'AUDIT_LOG_QUERIES' => ['true', 'Fiksuoti SQL uzklausas, apeinancias Eloquent (DB::table)'],
                 'AUDIT_LOG_QUEUE_CONTEXT' => ['true', 'Perkelti vartotojo kontesta i queue darbus'],
                 'AUDIT_LOG_EXCEPTIONS' => ['true', 'Fiksuoti nepagautas PHP klaidas'],
+                'AUDIT_LOG_DETECT_FAILED_LOGINS' => ['true', 'Automatiskai atpazinti nepavykusius prisijungimus'],
                 'AUDIT_LOG_CAPTURE_OLD_VALUES' => ['true', 'Nuskaityti senas reiksmes pries UPDATE/DELETE'],
                 'AUDIT_LOG_OLD_VALUES_MAX_ROWS' => ['5', 'Riba masiniams atnaujinimams'],
                 'AUDIT_LOG_MAX_BINDING_LENGTH' => ['500', 'Maks. reiksmes ilgis zurnale'],

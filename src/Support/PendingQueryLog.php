@@ -68,7 +68,19 @@ class PendingQueryLog
 
         $entry = $pending['entry'];
 
-        $logger->info($entry['category'], $entry['description'], $entry['data']);
+        // Slaptažodžio keitimas - atskiras saugumo įrašas. Rašomas net jei
+        // pagrindinis įrašas praleidžiamas (kai pasikeitė TIK slaptažodis).
+        if (!empty($entry['password_changed'])) {
+            $logger->security(
+                'password_changed',
+                $entry['password_changed']['description'],
+                $entry['password_changed']['data']
+            );
+        }
+
+        if ($entry['log_main'] ?? true) {
+            $logger->info($entry['category'], $entry['description'], $entry['data']);
+        }
     }
 
     protected function registerShutdownFlush(): void

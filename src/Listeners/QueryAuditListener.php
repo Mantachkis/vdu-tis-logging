@@ -57,6 +57,12 @@ class QueryAuditListener
 
         [$oldValues, $newValues] = $this->resolveChanges($statement, $parsed['values'], $snapshot);
 
+        // Slaptažodžio keitimą nustatome PRIEŠ jautrių laukų pašalinimą -
+        // po jo slaptažodžio stulpelio jau nebesimatytų.
+        $passwordFields = $statement === 'update'
+            ? $this->changedPasswordFields($newValues)
+            : [];
+
         // Jautrūs laukai (slaptažodžiai, remember_token, asmens kodas)
         // šalinami IR SQL lygmenyje. Iki v2.15.0 config('audit.exclude')
         // buvo taikomas tik Eloquent mechanizmui, tad per DB::table()
@@ -66,11 +72,12 @@ class QueryAuditListener
         $newValues = $this->excludeSensitiveFields($newValues);
         $parsed['conditions'] = $this->excludeSensitiveFields($parsed['conditions']);
 
-        // Jei po jautrių laukų pašalinimo nieko neliko, įrašas beprasmis -
-        // fiksuotume "kažkas pasikeitė", nenurodydami ką. Pats pakeitimo
-        // faktas jautriame lauke (pvz. slaptažodžio keitimas) turi būti
-        // fiksuojamas atskirai, per projekto kodą.
-        if (in_array($statement, ['update', 'insert'], true) && empty($newValues)) {
+        // Jei po jautrių laukų pašalinimo nieko neliko, pagrindinis įrašas
+        // beprasmis - fiksuotume "kažkas pasikeitė", nenurodydami ką. Bet
+        // slaptažodžio keitimo faktą vis tiek užfiksuosime atskiru įrašu.
+        $logMain = !(in_array($statement, ['update', 'insert'], true) && empty($newValues));
+
+        if (!$logMain && empty($passwordFields)) {
             return;
         }
 
@@ -95,16 +102,52 @@ class QueryAuditListener
         // SQL užklausos, tad dabar dar nežinome, ar to paties pakeitimo
         // tuoj neužfiksuos modelio mechanizmas. Atidedame iki kitos
         // užklausos (arba užklausos pabaigos) - žr. PendingQueryLog.
+        $occurredAt = now()->toIso8601String();
+
         app(PendingQueryLog::class)->push($table, [
             'category' => 'db_'.$statement,
             'description' => 'Duomenų bazės pakeitimas ('.strtoupper($statement).')'.($table ? ": {$table}" : ''),
+            'log_main' => $logMain,
             'data' => [
-                'occurred_at' => now()->toIso8601String(),
+                'occurred_at' => $occurredAt,
                 'old_values' => $oldValues,
                 'new_values' => $newValues,
                 'context' => $context,
             ],
+            // Slaptažodžio keitimas keliauja kartu su pagrindiniu įrašu per
+            // tą patį atidėjimo mechanizmą - tad jei Eloquent jau užfiksavo
+            // tą patį pakeitimą (su savu password_changed), SQL lygmens
+            // įrašas nebus dubliuojamas.
+            'password_changed' => empty($passwordFields) ? null : [
+                'description' => 'Slaptažodis pakeistas'.($table ? ": {$table}" : ''),
+                'data' => [
+                    'occurred_at' => $occurredAt,
+                    'context' => [
+                        'table' => $table,
+                        'conditions' => $parsed['conditions'],
+                        'fields' => $passwordFields,
+                    ],
+                ],
+            ],
         ]);
+    }
+
+    /**
+     * Grąžina slaptažodžio stulpelius, kurie realiai pasikeitė.
+     *
+     * @return string[]
+     */
+    protected function changedPasswordFields(?array $values): array
+    {
+        if (empty($values)) {
+            return [];
+        }
+
+        $passwordFields = array_map('strtolower', (array) config('audit.password_fields', []));
+
+        return array_values(array_filter(array_keys($values), function ($column) use ($passwordFields) {
+            return in_array(strtolower((string) $column), $passwordFields, true);
+        }));
     }
 
     /**

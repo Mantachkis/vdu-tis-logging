@@ -65,6 +65,17 @@ class EventLogger
     protected $recordedActions = 0;
 
     /**
+     * Kategorijos, jau užfiksuotos per šią užklausą.
+     *
+     * Leidžia vėliau veikiantiems mechanizmams (pvz. LogFailedLogins
+     * middleware) patikrinti, ar tas pats įvykis jau neužfiksuotas kitu
+     * keliu - Laravel Failed event'u arba rankiniu kvietimu kontroleryje.
+     *
+     * @var array<string, true>
+     */
+    protected $recordedCategories = [];
+
+    /**
      * Lentelės, kurių pakeitimus per šią užklausą JAU užfiksavo Eloquent
      * mechanizmas (create/update/delete su subject_type).
      *
@@ -153,7 +164,17 @@ class EventLogger
             $this->recordedActions++;
         }
 
+        $this->recordedCategories[$category] = true;
+
         $this->rememberEloquentTable($category, $data);
+    }
+
+    /**
+     * Ar ši kategorija jau užfiksuota per šią užklausą.
+     */
+    public function hasRecorded(string $category): bool
+    {
+        return isset($this->recordedCategories[$category]);
     }
 
     /**
@@ -161,7 +182,11 @@ class EventLogger
      */
     protected function rememberEloquentTable(string $category, array $data): void
     {
-        if (!in_array($category, ['create', 'update', 'delete'], true)) {
+        // password_changed irgi pažymi lentelę - kai pasikeičia TIK
+        // slaptažodis, Eloquent užrašo password_changed, bet ne update.
+        // Be šito SQL lygmuo nesužinotų, kad pakeitimas jau užfiksuotas,
+        // ir įrašas dubliuotųsi.
+        if (!in_array($category, ['create', 'update', 'delete', 'password_changed'], true)) {
             return;
         }
 

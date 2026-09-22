@@ -3,6 +3,54 @@
 Visi svarbūs paketo pakeitimai fiksuojami šiame faile.
 Versijavimas pagal [Semantic Versioning](https://semver.org/): MAJOR.MINOR.PATCH.
 
+## [2.19.0] - 2026-09-16
+
+### Pataisyta (saugumo spraga)
+- **Slaptažodžio keitimas buvo visai nefiksuojamas.** Nuo v2.15.0 pakeitimai,
+  liečiantys TIK jautrius laukus, praleidžiami (kad nerodytų `remember_token`),
+  tad `$user->password = ...; $user->save()` dingdavo iš žurnalo be pėdsakų.
+
+### Pridėta
+- **`password_changed` saugumo įrašas** - fiksuojamas kiekvieną kartą, kai
+  pasikeičia `config('audit.password_fields')` stulpelis. Tik FAKTAS, niekada
+  ne reikšmė. `subject_id` rodo, kieno slaptažodis pakeistas; `user_id` - kas
+  pakeitė (null, jei per atkūrimo nuorodą).
+- Veikia ir Eloquent, ir `DB::table()` lygmenyje, be dubliavimosi.
+- Nepriklauso nuo pakeitimo būdo: Laravel atkūrimas, projekto forma,
+  administratoriaus veiksmas.
+- `remember_token` sąmoningai nelaikomas slaptažodžiu - Laravel jį keičia
+  kiekvieno atsijungimo metu.
+- `config('audit.password_fields')` - numatytieji `password`, `pass`,
+  `passwd`, `pwd`.
+- 9 nauji testai.
+
+### Dokumentacija
+- DIEGIMAS.md papildyta skyriumi apie nepriklausomumą nuo SSO paketo ir
+  išorinių tapatybės tiekėjų (SAML/OIDC) apribojimus.
+
+## [2.18.0] - 2026-09-16
+
+### Pridėta
+- **Nepavykę prisijungimai atpažįstami AUTOMATIŠKAI** - `LoginController`
+  redaguoti nebereikia. Laravel meta `Failed` event'ą tik naudojant
+  `Auth::attempt()`, o SSO brokeriai ir dvigubo guard'o projektai jo
+  nenaudoja - iki šiol tai reikalavo rankinio kvietimo kiekviename projekte.
+- `LogFailedLogins` middleware atpažįsta nepavykusį bandymą pagal
+  standartinę `auth.failed` klaidos žinutę sesijoje - ją Laravel grąžina
+  nepriklausomai nuo autentifikacijos būdo. Lyginama su `trans('auth.failed')`
+  einamąja kalba, tad veikia su bet kokiu projekto vertimu.
+- Dubliavimosi nėra: jei tas pats bandymas jau užfiksuotas `Failed` event'u
+  ar rankiniu kvietimu, antras įrašas nedaromas - esamų projektų su jau
+  pridėtais kvietimais keisti nereikia.
+- `EventLogger::hasRecorded()` - ar kategorija jau užfiksuota per užklausą.
+- Įrašai pažymimi `"detected_by": "auth_failed_message"`.
+- Išjungiama per `AUDIT_LOG_DETECT_FAILED_LOGINS=false`.
+- 8 nauji testai.
+
+### Ko nepagauna
+Projekto specifinių pranešimų (nepatvirtinta paskyra) ir slaptažodžio
+atkūrimo srautų - jų atpažinti generiškai neįmanoma.
+
 ## [2.17.0] - 2026-09-14
 
 ### Pridėta

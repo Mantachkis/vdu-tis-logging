@@ -76,6 +76,25 @@ return [
     |   'ckods' reiškia ką kita ir yra jautrus - įtraukite jį čia.
     |
     */
+    /*
+    |--------------------------------------------------------------------
+    | Slaptažodžio laukai
+    |--------------------------------------------------------------------
+    |
+    | Kai pasikeičia bet kuris iš šių laukų, fiksuojamas atskiras saugumo
+    | įrašas "password_changed" - tik FAKTAS, kad slaptažodis pakeistas,
+    | niekada ne pati reikšmė (jie taip pat yra "exclude" sąraše žemiau).
+    |
+    | Veikia nepriklausomai nuo to, KAIP slaptažodis keičiamas: standartinis
+    | Laravel atkūrimas, projekto sava forma, administratoriaus veiksmas,
+    | Eloquent ar DB::table() - nes visais atvejais keičiamas DB stulpelis.
+    |
+    | "remember_token" čia sąmoningai NĖRA - Laravel jį keičia kiekvieno
+    | atsijungimo metu, tai ne slaptažodžio keitimas.
+    |
+    */
+    'password_fields' => ['password', 'pass', 'passwd', 'pwd'],
+
     'exclude' => [
         // Slaptažodžiai ir raktai - universaliai jautrūs.
         'password', 'pass', 'passwd', 'pwd',
@@ -132,6 +151,30 @@ return [
     |
     */
     'log_exceptions' => env('AUDIT_LOG_EXCEPTIONS', true),
+
+    /*
+    |--------------------------------------------------------------------
+    | Automatinis nepavykusių prisijungimų atpažinimas
+    |--------------------------------------------------------------------
+    |
+    | Laravel meta Failed event'ą tik naudojant Auth::attempt(). SSO
+    | brokeriai (zefy/laravel-sso, iffutsius/laravel-sso) ir projektai su
+    | keliais guard'ais jo nenaudoja - tad nepavykę bandymai likdavo
+    | neužfiksuoti be rankinio kvietimo LoginController'yje.
+    |
+    | Įjungus, middleware atpažįsta nepavykusį prisijungimą pagal
+    | standartinę `auth.failed` klaidos žinutę sesijoje - ją grąžina
+    | Laravel nepriklausomai nuo autentifikacijos būdo.
+    |
+    | Dubliavimosi nėra: jei tas pats bandymas jau užfiksuotas Failed
+    | event'u ar rankiniu kvietimu, antras įrašas nedaromas.
+    |
+    | NEPAGAUNA projekto specifinių pranešimų (pvz. nepatvirtinta
+    | paskyra) ir slaptažodžio atkūrimo - juos reikia fiksuoti rankiniu
+    | kvietimu, jei reikia.
+    |
+    */
+    'detect_failed_logins' => env('AUDIT_LOG_DETECT_FAILED_LOGINS', true),
 
     /*
     |--------------------------------------------------------------------

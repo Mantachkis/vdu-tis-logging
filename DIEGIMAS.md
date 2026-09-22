@@ -92,7 +92,7 @@ grep -rl "XLSX.writeFile\|table_to_book" resources/views/ 2>/dev/null
 | Rezultatas | Ką reikš |
 |---|---|
 | PHP 7.1–8.x, Laravel 5.7–9.x | Suderinama |
-| `attemptLogin` rastas | Reikės 7 skyriaus |
+| `attemptLogin` rastas | Nieko - nuo v2.18.0 automatiškai |
 | `XLSX.writeFile` rastas | Reikės 8 skyriaus |
 
 ## 5. composer.json
@@ -208,127 +208,89 @@ php artisan route:clear
 
 ## 7. Login kontroleris
 
-SSO brokeris nenaudoja `Auth::attempt()`, tad Laravel niekada nesužino apie
-nepavykusį bandymą. Sėkmingi prisijungimai fiksuojami automatiškai.
+**Nuo v2.18.0 — nieko keisti nereikia.**
 
-### Variantas A — standartinis SSO brokeris
+Nepavykę prisijungimai atpažįstami automatiškai pagal standartinę `auth.failed`
+klaidos žinutę, kurią Laravel grąžina nepriklausomai nuo autentifikacijos būdo
+— ir SSO brokerio (`zefy`, `iffutsius`), ir dvigubo guard'o atveju.
 
-Buvo:
+Sėkmingi prisijungimai ir atsijungimai taip pat fiksuojami automatiškai.
 
-```php
-protected function attemptLogin(Request $request)
-{
-    $broker = new \Zefy\LaravelSSO\LaravelSSOBroker;
-    $credentials = $this->credentials($request);
+### Slaptažodžio keitimas — taip pat automatiškai (v2.19.0+)
 
-    return $broker->login($credentials[$this->username()], $credentials['password']);
-}
-```
+Kai pasikeičia `password`, `pass`, `passwd` ar `pwd` stulpelis, fiksuojamas
+atskiras saugumo įrašas `password_changed` — tik faktas, ne reikšmė. Veikia
+nepriklausomai nuo to, kaip keičiama: Laravel atkūrimas, projekto forma,
+Eloquent ar `DB::table()`.
 
-Tampa:
+### Nepriklausomumas nuo SSO paketo
 
-```php
-protected function attemptLogin(Request $request)
-{
-    $broker = new \Zefy\LaravelSSO\LaravelSSOBroker;
-    $credentials = $this->credentials($request);
+Pakeitus SSO paketą (pvz. iš `zefy` į kitą), nieko keisti nereikia, **jei**
+naujasis paketas:
+- prijungia vartotoją per `Auth::login()` / `Auth::guard()->login()` — beveik
+  visi Laravel SSO paketai taip daro;
+- nepavykus grąžina standartinę `auth.failed` žinutę.
 
-    if ($broker->login($credentials[$this->username()], $credentials['password'])) {
-        return true;
-    }
+**Išimtis — išorinis tapatybės tiekėjas (SAML, OpenID Connect):** jei
+slaptažodis įvedamas **kito serverio** puslapyje, o į jūsų sistemą grįžtama
+jau prisijungus, nepavykę bandymai ir slaptažodžio keitimai vyksta tame
+serveryje — jūsų sistema apie juos fiziškai nesužino. Tokius įvykius reikia
+fiksuoti tapatybės tiekėjo pusėje. Sėkmingas prisijungimas ir atsijungimas
+jūsų sistemoje vis tiek bus fiksuojami.
 
-    \Vdu\TisLogging\Facades\AuditLog::security(
-        'login_failed',
-        'Nepavykes prisijungimo bandymas ('.$request->input($this->username()).')',
-        ['user_identifier' => $request->input($this->username())]
-    );
+### Ko automatiškai nepagauna
 
-    return false;
-}
-```
+Projekto specifinių pranešimų, kurie nenaudoja `auth.failed` teksto:
 
-Jei projektas naudoja `Iffutsius\LaravelSSO\LaravelSSOBroker` — pakeiskite
-namespace.
+- blokuota nepatvirtinta paskyra (`„Norint prisijungti, turite patvirtinti..."`)
+- nesėkmingi slaptažodžio atkūrimo bandymai (neegzistuojantis el. paštas)
 
-### Variantas B — dvigubas guard'as (espUser + SSO)
+Sėkmingas atkūrimas matomas automatiškai — per `password_changed` ir
+`mail_sent` įrašus.
+
+Jei tai svarbu, pridėkite rankinį kvietimą tose vietose:
 
 ```php
-protected function attemptLogin(Request $request)
-{
-    $user = Users::where('email', $request->username)->first();
+// Nepatvirtinta paskyra:
+\Vdu\TisLogging\Facades\AuditLog::warning(
+    'login_blocked',
+    'Bandymas prisijungti prie nepatvirtintos paskyros ('.$request->username.')',
+    ['user_id' => $user->id, 'user_identifier' => $request->username]
+);
 
-    if ($user) {
-        if ($user->is_verified != 1) {
-            \Vdu\TisLogging\Facades\AuditLog::warning(
-                'login_blocked',
-                'Bandymas prisijungti prie nepatvirtintos paskyros ('.$request->username.')',
-                [
-                    'user_id' => $user->id,
-                    'user_identifier' => $request->username,
-                    'context' => ['guard' => 'espUser'],
-                ]
-            );
-
-            return back()->with('error', 'Norint prisijungti, turite patvirtinti savo el.pasto adresa.');
-        }
-
-        Auth::shouldUse('espUser');
-        Auth::guard('espUser')->login($user);
-
-        return Auth::guard('espUser')->check();
-    }
-
-    $broker = new \Zefy\LaravelSSO\LaravelSSOBroker;
-    $credentials = $this->credentials($request);
-
-    if ($broker->login($credentials[$this->username()], $credentials['password'])) {
-        $user = User::where('username', $credentials['username'])->first();
-        Auth::guard('web')->login($user);
-
-        return Auth::guard('web')->check();
-    }
-
-    \Vdu\TisLogging\Facades\AuditLog::security(
-        'login_failed',
-        'Nepavykes prisijungimo bandymas ('.$request->username.')',
-        [
-            'user_identifier' => $request->username,
-            'context' => ['attempted_guards' => ['espUser', 'web/sso']],
-        ]
-    );
-
-    return false;
-}
-```
-
-### Slaptažodžio atkūrimas (jei yra)
-
-```php
-// Sekminga uzklausa:
+// Slaptazodzio atkurimas:
 \Vdu\TisLogging\Facades\AuditLog::security(
     'password_reset_requested',
     'Slaptazodzio atkurimas uzklaustas ('.$email.')',
     ['user_id' => $user->id, 'user_identifier' => $email]
 );
-
-// Nepatvirtinta paskyra:
-\Vdu\TisLogging\Facades\AuditLog::warning(
-    'password_reset_blocked',
-    'Slaptazodzio atkurimo bandymas nepatvirtintai paskyrai ('.$email.')',
-    ['user_id' => $user->id, 'user_identifier' => $email]
-);
-
-// Neegzistuojantis el. pastas (galimas zvalgymo bandymas):
-\Vdu\TisLogging\Facades\AuditLog::warning(
-    'password_reset_unknown_user',
-    'Slaptazodzio atkurimo bandymas neegzistuojanciam vartotojui ('.$email.')',
-    ['user_identifier' => $email]
-);
 ```
+
+### Jei projekte jau yra rankinis `login_failed` kvietimas
+
+Nieko šalinti nereikia — dubliavimosi nebus. Middleware patikrina, ar tas
+pats bandymas jau užfiksuotas, ir antro įrašo nedaro.
+
+### Patikrinimas
+
+Bandykite prisijungti su neteisingu slaptažodžiu:
 
 ```bash
-php artisan config:clear
+grep login_failed /home/logs/{APP_NAME}/audit/audit-$(date +%Y-%m-%d).log | tail -1
 ```
+
+Įraše turi būti `"detected_by":"auth_failed_message"` — tai reiškia, kad
+suveikė automatinis atpažinimas.
+
+**Jei įrašo nėra** — projektas greičiausiai grąžina savo tekstą vietoj
+`auth.failed`. Patikrinkite kontrolerį:
+
+```bash
+grep -n "withErrors\|auth.failed" app/Http/Controllers/Auth/LoginController.php
+```
+
+Jei ten savas tekstas, pakeiskite į `__('auth.failed')` arba pridėkite
+rankinį kvietimą.
 
 ## 8. Klientinės pusės eksportai
 
@@ -456,6 +418,7 @@ Pridėję šiuos dalykus rankomis gausite **dubliuotus įrašus**:
 | `Kernel.php` middleware registravimas | Registruojama per ServiceProvider |
 | `$this->logView()` kontroleriuose | Jei įjungtas `AUDIT_LOG_PAGE_VIEWS` |
 | `query_params` sąrašas | Numatytieji šablonai apima `*Id`, `*_id`, `ckods` |
+| `login_failed` kvietimas `LoginController` | Atpažįstama automatiškai (v2.18.0+) |
 
 **Jei ankstesniuose projektuose jau pridėjote `LogsExceptions`** — pašalinkite:
 
@@ -533,7 +496,8 @@ php artisan queue:restart
 | Kategorija | Kaip |
 |---|---|
 | `login`, `logout` | Automatiškai |
-| `login_failed` | Rankinis (7 skyrius) |
+| `login_failed` | Automatiškai (v2.18.0+) |
+| `password_changed` | Automatiškai (v2.19.0+) |
 | `create`, `update`, `delete` | Automatiškai, visi modeliai |
 | `db_insert`, `db_update`, `db_delete` | Automatiškai, `DB::table()` |
 | `view` | Automatiškai (`AUDIT_LOG_PAGE_VIEWS`) |
