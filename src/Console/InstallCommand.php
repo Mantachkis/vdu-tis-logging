@@ -188,20 +188,27 @@ class InstallCommand extends Command
         $this->info('Diegimas baigtas.');
         $this->line('');
         $this->line('VEIKIA AUTOMATIŠKAI (nieko daryti nereikia):');
-        $this->line('  - prisijungimai/atsijungimai per Auth::attempt()');
-        $this->line('  - visų Eloquent modelių create/update/delete');
+        $this->line('  - prisijungimai ir atsijungimai (bet kuriuo guard\'u, taip pat SSO)');
+        $this->line('  - nepavykę prisijungimo bandymai');
+        $this->line('  - slaptažodžio keitimai (tik faktas, ne reikšmė)');
+        $this->line('  - visų Eloquent modelių create/update/delete su senomis reikšmėmis');
+        $this->line('  - DB::table() pakeitimai, apeinantys Eloquent');
         $this->line('  - failų atsisiuntimai (PDF, Excel, docx ir kt.)');
+        $this->line('  - išsiųsti el. laiškai');
+        $this->line('  - nepagautos PHP klaidos');
         $this->line('');
         $this->line('REIKIA ĮJUNGTI .env faile (pagal poreikį):');
-        $this->line('  AUDIT_LOG_QUERIES=true         - DB::table() pakeitimai, apeinantys Eloquent');
-        $this->line('  AUDIT_LOG_PAGE_VIEWS=whitelist - puslapių peržiūros (nurodykite maršrutus');
-        $this->line('                                   config/audit.php log_page_views.routes)');
+        $this->line('  AUDIT_LOG_PAGE_VIEWS=all       - puslapių peržiūros (arba "whitelist"');
+        $this->line('                                   su maršrutų sąrašu config/audit.php)');
         $this->line('  AUDIT_LOG_CLIENT_EVENTS=true   - naršyklėje vykstantys veiksmai (SheetJS)');
         $this->line('');
-        $this->line('REIKIA RANKINIO KODO:');
-                $this->line('');
-        $this->line('  2. Jei projektas naudoja custom auth (SSO, rankinis guard->login()),');
-        $this->line('     nepavykę prisijungimai NEBUS fiksuojami automatiškai - reikia');
-        $this->line('     AuditLog::security(...) kvietimo login kontroleryje. Žr. README.');
+        $this->line('REIKIA RANKINIO KODO (tik jei aktualu):');
+        $this->line('  - klientinės pusės Excel eksportai (SheetJS) - fetch kvietimas');
+        $this->line('    prieš XLSX.writeFile(). Žr. README.');
+        $this->line('  - projekto specifiniai pranešimai, pvz. blokuota nepatvirtinta');
+        $this->line('    paskyra - AuditLog::warning(...) kvietimas. Žr. DIEGIMAS.md.');
+        $this->line('');
+        $this->comment('Toliau: patikrinkite AUDIT_LOG_APP_NAME reikšmę .env faile -');
+        $this->comment('ji turi būti unikali šiam projektui.');
     }
 }

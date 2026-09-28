@@ -27,6 +27,11 @@ Versijavimas pagal [Semantic Versioning](https://semver.org/): MAJOR.MINOR.PATCH
   `max_bytes`.
 - 10 naujų testų.
 
+### Pataisyta
+- `audit:install` išvestis buvo pasenusi - vis dar rodė, kad nepavykę
+  prisijungimai per SSO reikalauja rankinio kodo, nors nuo v2.18.0 jie
+  atpažįstami automatiškai. Sąrašas perrašytas pagal dabartines galimybes.
+
 ### Svarbu
 - Perjungus į `syslog`, `AUDIT_LOG_RETENTION_DAYS` nebeturi reikšmės - failų
   nebėra, saugojimo terminą nustato administratorius per `logrotate`.
