@@ -3,53 +3,94 @@
 Visi svarbūs paketo pakeitimai fiksuojami šiame faile.
 Versijavimas pagal [Semantic Versioning](https://semver.org/): MAJOR.MINOR.PATCH.
 
-## [2.19.0] - 2026-09-16
-
-### Pataisyta (saugumo spraga)
-- **Slaptažodžio keitimas buvo visai nefiksuojamas.** Nuo v2.15.0 pakeitimai,
-  liečiantys TIK jautrius laukus, praleidžiami (kad nerodytų `remember_token`),
-  tad `$user->password = ...; $user->save()` dingdavo iš žurnalo be pėdsakų.
+## [2.19.0] - 2026-09-17
 
 ### Pridėta
-- **`password_changed` saugumo įrašas** - fiksuojamas kiekvieną kartą, kai
-  pasikeičia `config('audit.password_fields')` stulpelis. Tik FAKTAS, niekada
-  ne reikšmė. `subject_id` rodo, kieno slaptažodis pakeistas; `user_id` - kas
-  pakeitė (null, jei per atkūrimo nuorodą).
-- Veikia ir Eloquent, ir `DB::table()` lygmenyje, be dubliavimosi.
-- Nepriklauso nuo pakeitimo būdo: Laravel atkūrimas, projekto forma,
-  administratoriaus veiksmas.
-- `remember_token` sąmoningai nelaikomas slaptažodžiu - Laravel jį keičia
-  kiekvieno atsijungimo metu.
-- `config('audit.password_fields')` - numatytieji `password`, `pass`,
-  `passwd`, `pwd`.
-- 9 nauji testai.
+- **Syslog palaikymas.** Žurnalus galima perduoti OS žurnalo demonui
+  (rsyslog), iš kurio administratorius surenka juos į vieną vietą - naudinga
+  turint 10+ projektų keliuose serveriuose.
+- `AUDIT_LOG_DRIVER` - `file` (numatytoji), `syslog` arba `both`.
+  Rekomenduojama pereiti per `both`: taip įrašai nepradingsta, jei rsyslog
+  konfigūracija dar nesuveiks.
+- Identifikatoriai sudaromi automatiškai: `laravel-{app_name}-audit` ir
+  `laravel-{app_name}-error`. Prefiksas `laravel-` leidžia administratoriui
+  atskirti aplikacijų įrašus nuo sisteminių net jei kuri nors taisyklė
+  nesuveiks.
+- **`php artisan audit:syslog-info`** - parodo identifikatorius, Linux
+  vartotoją ir facility, kuriuos reikia perduoti administratoriui PRIEŠ
+  įjungiant syslog.
+- `SizeLimitedJsonFormatter` - syslog ilgesnius pranešimus TYLIAI NUKERPA, o
+  nukirptas JSON tampa nebeskaitomas (prarandamas visas įrašas, ne tik galas).
+  Todėl per dideli įrašai apkarpomi pakopomis: `old_values`/`new_values` →
+  `context` → žinutė. Apkarpytas įrašas pažymimas `_truncated` lauku.
+- Konfigūruojama: `ident_prefix`, `separate_channels`, `facility`,
+  `max_bytes`.
+- 10 naujų testų.
 
-### Dokumentacija
-- DIEGIMAS.md papildyta skyriumi apie nepriklausomumą nuo SSO paketo ir
-  išorinių tapatybės tiekėjų (SAML/OIDC) apribojimus.
+### Svarbu
+- Perjungus į `syslog`, `AUDIT_LOG_RETENTION_DAYS` nebeturi reikšmės - failų
+  nebėra, saugojimo terminą nustato administratorius per `logrotate`.
+- Laravel `LOG_CHANNEL=syslog` valdo TIK Laravel savo `Log::` fasadą ir
+  audito žurnalams įtakos neturi.
 
 ## [2.18.0] - 2026-09-16
 
+Autentifikacijos įvykiai dabar fiksuojami visiškai automatiškai -
+`LoginController` redaguoti nebereikia, ir tai veikia nepriklausomai nuo
+naudojamo SSO paketo.
+
 ### Pridėta
-- **Nepavykę prisijungimai atpažįstami AUTOMATIŠKAI** - `LoginController`
-  redaguoti nebereikia. Laravel meta `Failed` event'ą tik naudojant
-  `Auth::attempt()`, o SSO brokeriai ir dvigubo guard'o projektai jo
-  nenaudoja - iki šiol tai reikalavo rankinio kvietimo kiekviename projekte.
-- `LogFailedLogins` middleware atpažįsta nepavykusį bandymą pagal
-  standartinę `auth.failed` klaidos žinutę sesijoje - ją Laravel grąžina
-  nepriklausomai nuo autentifikacijos būdo. Lyginama su `trans('auth.failed')`
-  einamąja kalba, tad veikia su bet kokiu projekto vertimu.
-- Dubliavimosi nėra: jei tas pats bandymas jau užfiksuotas `Failed` event'u
-  ar rankiniu kvietimu, antras įrašas nedaromas - esamų projektų su jau
-  pridėtais kvietimais keisti nereikia.
+- **Nepavykę prisijungimai atpažįstami automatiškai.** Laravel meta `Failed`
+  event'ą tik naudojant `Auth::attempt()`, o SSO brokeriai (`zefy`,
+  `iffutsius`) ir dvigubo guard'o projektai jo nenaudoja - iki šiol tai
+  reikalavo rankinio kvietimo kiekviename projekte.
+  - `LogFailedLogins` middleware atpažįsta nepavykusį bandymą pagal
+    standartinę `auth.failed` klaidos žinutę sesijoje - ją Laravel grąžina
+    nepriklausomai nuo autentifikacijos būdo. Lyginama su
+    `trans('auth.failed')` einamąja kalba.
+  - Įrašai pažymimi `"detected_by": "auth_failed_message"`.
+  - Išjungiama per `AUDIT_LOG_DETECT_FAILED_LOGINS=false`.
+
+- **Slaptažodžio keitimas fiksuojamas automatiškai (`password_changed`).**
+  - Fiksuojamas kiekvieną kartą, kai pasikeičia
+    `config('audit.password_fields')` stulpelis (numatytieji `password`,
+    `pass`, `passwd`, `pwd`). Tik FAKTAS, niekada ne reikšmė.
+  - `subject_id` rodo, kieno slaptažodis pakeistas; `user_id` - kas pakeitė
+    (null, jei per atkūrimo nuorodą).
+  - Veikia ir Eloquent, ir `DB::table()` lygmenyje, nepriklausomai nuo
+    pakeitimo būdo (Laravel atkūrimas, projekto forma, administratorius).
+  - `remember_token` sąmoningai nelaikomas slaptažodžiu - Laravel jį keičia
+    kiekvieno atsijungimo metu.
+
 - `EventLogger::hasRecorded()` - ar kategorija jau užfiksuota per užklausą.
-- Įrašai pažymimi `"detected_by": "auth_failed_message"`.
-- Išjungiama per `AUDIT_LOG_DETECT_FAILED_LOGINS=false`.
-- 8 nauji testai.
+
+### Pataisyta (saugumo spraga)
+- **Slaptažodžio keitimas buvo visai nefiksuojamas.** Nuo v2.15.0 pakeitimai,
+  liečiantys TIK jautrius laukus, praleidžiami (kad nerodytų
+  `remember_token`), tad slaptažodžio pakeitimas dingdavo iš žurnalo be
+  pėdsakų.
+
+### Dubliavimosi nėra
+- Jei nepavykęs prisijungimas jau užfiksuotas `Failed` event'u ar rankiniu
+  kvietimu kontroleryje - antras įrašas nedaromas. Esamų projektų su jau
+  pridėtais kvietimais keisti nereikia.
+- Slaptažodžio keitimas per Eloquent nedubliuojamas SQL lygmenyje - net kai
+  pasikeičia tik slaptažodis ir Eloquent užrašo `password_changed`, bet ne
+  `update`.
 
 ### Ko nepagauna
-Projekto specifinių pranešimų (nepatvirtinta paskyra) ir slaptažodžio
-atkūrimo srautų - jų atpažinti generiškai neįmanoma.
+- Projekto specifinių pranešimų (nepatvirtinta paskyra) ir nesėkmingų
+  slaptažodžio atkūrimo bandymų - jų atpažinti generiškai neįmanoma.
+- Išorinių tapatybės tiekėjų (SAML, OpenID Connect), kur slaptažodis
+  įvedamas kito serverio puslapyje - nepavykę bandymai ir slaptažodžio
+  keitimai vyksta tame serveryje.
+
+### Dokumentacija
+- DIEGIMAS.md 7 skyrius perrašytas: `LoginController` keisti nebereikia.
+  Pridėtas skyrius apie nepriklausomumą nuo SSO paketo.
+
+### Testai
+- 17 naujų testų (174 iš viso).
 
 ## [2.17.0] - 2026-09-14
 

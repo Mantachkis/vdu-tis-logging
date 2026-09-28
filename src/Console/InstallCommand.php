@@ -26,6 +26,7 @@ class InstallCommand extends Command
                 'AUDIT_LOG_AUDIT_FILENAME' => ['audit.log', null],
                 'AUDIT_LOG_ERROR_FILENAME' => ['error.log', null],
                 'AUDIT_LOG_RETENTION_DAYS' => ['90', 'Saugojimo terminas dienomis (0 = netrinti)'],
+                'AUDIT_LOG_DRIVER' => ['file', 'Kur rasyti: file | syslog | both'],
             ],
 
             'Modeliu ir duomenu baze' => [

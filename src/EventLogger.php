@@ -6,8 +6,10 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Request;
 use Monolog\Logger;
 use Monolog\Handler\RotatingFileHandler;
+use Monolog\Handler\SyslogHandler;
 use Monolog\Formatter\JsonFormatter;
 use Vdu\TisLogging\Support\QueueContext;
+use Vdu\TisLogging\Support\SizeLimitedJsonFormatter;
 
 /**
  * Centrinis įvykių žurnalizavimo servisas.
@@ -90,24 +92,60 @@ class EventLogger
     public function __construct()
     {
         $appName = (string) config('audit.app_name', 'app');
-        $basePath = rtrim((string) config('audit.base_path', ''), '/');
-        $dir = $basePath.'/'.$appName;
+        $driver = (string) config('audit.driver', 'file');
 
-        $auditDir = $dir.'/audit';
-        $errorDir = $dir.'/error';
+        $this->auditLogger = new Logger('audit');
+        $this->errorLogger = new Logger('error');
 
-        $this->ensureDirectoryExists($auditDir);
-        $this->ensureDirectoryExists($errorDir);
+        if ($driver === 'file' || $driver === 'both') {
+            $basePath = rtrim((string) config('audit.base_path', ''), '/');
+            $dir = $basePath.'/'.$appName;
 
-        $this->auditLogger = $this->makeRotatingLogger(
-            'audit',
-            $auditDir.'/'.config('audit.audit_filename', 'audit.log')
-        );
+            $auditDir = $dir.'/audit';
+            $errorDir = $dir.'/error';
 
-        $this->errorLogger = $this->makeRotatingLogger(
-            'error',
-            $errorDir.'/'.config('audit.error_filename', 'error.log')
-        );
+            $this->ensureDirectoryExists($auditDir);
+            $this->ensureDirectoryExists($errorDir);
+
+            $this->auditLogger->pushHandler($this->makeFileHandler(
+                $auditDir.'/'.config('audit.audit_filename', 'audit.log')
+            ));
+
+            $this->errorLogger->pushHandler($this->makeFileHandler(
+                $errorDir.'/'.config('audit.error_filename', 'error.log')
+            ));
+        }
+
+        if ($driver === 'syslog' || $driver === 'both') {
+            $this->auditLogger->pushHandler($this->makeSyslogHandler('audit', $appName));
+            $this->errorLogger->pushHandler($this->makeSyslogHandler('error', $appName));
+        }
+    }
+
+    /**
+     * Syslog identifikatorius, pagal kurį sistemos administratorius
+     * nukreipia įrašus į atskirus failus.
+     *
+     * Pavyzdys: "laravel-epasirasymas-audit".
+     *
+     * Prefiksas "laravel-" svarbus: jei kas nors nesuveiks, įrašai
+     * nepasimes tarp sisteminių žurnalų, o administratoriui bus lengva
+     * atskirti, kad tai Laravel aplikacijų įrašai.
+     */
+    public static function syslogIdent(string $channel, ?string $appName = null): string
+    {
+        $appName = $appName ?? (string) config('audit.app_name', 'app');
+        $prefix = (string) config('audit.syslog.ident_prefix', 'laravel-');
+
+        $ident = $prefix.$appName;
+
+        // Atskiri identifikatoriai audit ir error kanalams leidžia
+        // administratoriui nukreipti juos į skirtingus failus.
+        if (config('audit.syslog.separate_channels', true)) {
+            $ident .= '-'.$channel;
+        }
+
+        return $ident;
     }
 
     /**
@@ -367,7 +405,7 @@ class EventLogger
         }
     }
 
-    protected function makeRotatingLogger(string $channel, string $path): Logger
+    protected function makeFileHandler(string $path): RotatingFileHandler
     {
         $retentionDays = (int) config('audit.retention_days', 90);
 
@@ -377,9 +415,51 @@ class EventLogger
         $handler = new RotatingFileHandler($path, $retentionDays, Logger::DEBUG, true, 0664, true);
         $handler->setFormatter(new JsonFormatter());
 
-        $logger = new Logger($channel);
-        $logger->pushHandler($handler);
+        return $handler;
+    }
 
-        return $logger;
+    /**
+     * Syslog handler'is - įrašai perduodami OS žurnalo demonui (rsyslog),
+     * iš kurio administratorius gali juos surinkti į vieną vietą.
+     *
+     * Dydžio ribojimas BŪTINAS: syslog ilgesnius pranešimus tyliai
+     * nukerpa, o nukirptas JSON tampa nebeskaitomas - prarandamas visas
+     * įrašas, ne tik jo galas.
+     */
+    protected function makeSyslogHandler(string $channel, string $appName): SyslogHandler
+    {
+        $facility = $this->resolveFacility();
+
+        $handler = new SyslogHandler(
+            self::syslogIdent($channel, $appName),
+            $facility,
+            Logger::DEBUG,
+            true,
+            LOG_PID
+        );
+
+        $handler->setFormatter(new SizeLimitedJsonFormatter(
+            (int) config('audit.syslog.max_bytes', 7000)
+        ));
+
+        return $handler;
+    }
+
+    /**
+     * Syslog facility - kategorija, pagal kurią rsyslog gali filtruoti.
+     * Numatytoji LOG_USER; galimos ir local0-local7, dažnai naudojamos
+     * aplikacijų žurnalams atskirti.
+     */
+    protected function resolveFacility(): int
+    {
+        $configured = config('audit.syslog.facility', 'LOG_USER');
+
+        if (is_int($configured)) {
+            return $configured;
+        }
+
+        $name = strtoupper((string) $configured);
+
+        return defined($name) ? constant($name) : LOG_USER;
     }
 }

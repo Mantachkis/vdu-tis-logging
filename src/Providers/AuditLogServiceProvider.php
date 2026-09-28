@@ -15,6 +15,7 @@ use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\ServiceProvider;
 use Vdu\TisLogging\Console\InstallCommand;
+use Vdu\TisLogging\Console\SyslogInfoCommand;
 use Vdu\TisLogging\Exceptions\AuditingExceptionHandler;
 use Vdu\TisLogging\Exceptions\AuditingExceptionHandlerLegacy;
 use Vdu\TisLogging\Http\Middleware\LogFailedLogins;
@@ -113,6 +114,7 @@ class AuditLogServiceProvider extends ServiceProvider
         if ($this->app->runningInConsole()) {
             $this->commands([
                 InstallCommand::class,
+                SyslogInfoCommand::class,
             ]);
         } else {
             $kernel = $this->app->make(Kernel::class);

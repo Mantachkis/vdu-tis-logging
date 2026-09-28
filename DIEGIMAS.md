@@ -216,7 +216,7 @@ klaidos žinutę, kurią Laravel grąžina nepriklausomai nuo autentifikacijos b
 
 Sėkmingi prisijungimai ir atsijungimai taip pat fiksuojami automatiškai.
 
-### Slaptažodžio keitimas — taip pat automatiškai (v2.19.0+)
+### Slaptažodžio keitimas — taip pat automatiškai (v2.18.0+)
 
 Kai pasikeičia `password`, `pass`, `passwd` ar `pwd` stulpelis, fiksuojamas
 atskiras saugumo įrašas `password_changed` — tik faktas, ne reikšmė. Veikia
@@ -497,7 +497,7 @@ php artisan queue:restart
 |---|---|
 | `login`, `logout` | Automatiškai |
 | `login_failed` | Automatiškai (v2.18.0+) |
-| `password_changed` | Automatiškai (v2.19.0+) |
+| `password_changed` | Automatiškai (v2.18.0+) |
 | `create`, `update`, `delete` | Automatiškai, visi modeliai |
 | `db_insert`, `db_update`, `db_delete` | Automatiškai, `DB::table()` |
 | `view` | Automatiškai (`AUDIT_LOG_PAGE_VIEWS`) |
@@ -566,7 +566,100 @@ grep '"category":"view"' /home/logs/{APP_NAME}/audit/audit-$(date +%Y-%m-%d).log
 
 ---
 
-# VIII DALIS — RETENCIJA
+# VIII DALIS — SYSLOG (centralizuotas surinkimas)
+
+Pagal nutylėjimą žurnalai rašomi į failus serveryje. Norint juos surinkti į
+vieną vietą, galima perduoti sistemos žurnalo demonui (rsyslog).
+
+## 1. Surinkite duomenis administratoriui
+
+KIEKVIENAME projekte:
+
+```bash
+php artisan audit:syslog-info
+```
+
+Komanda parodys:
+
+```
+Projektas:        epasirasymas
+Linux vartotojas: epasirasymas
+Facility:         LOG_USER
+
+Identifikatoriai (ident):
+  laravel-epasirasymas-audit   - iprasti veiksmai
+  laravel-epasirasymas-error   - klaidos ir ispejimai
+```
+
+**Šiuos duomenis perduokite administratoriui PRIEŠ įjungdami syslog.** Be
+jų jis negali nukreipti įrašų į atskirus failus — jie susimaišytų su
+sisteminiais žurnalais.
+
+## 2. Palaukite, kol administratorius sukonfigūruos rsyslog
+
+Prefiksas `laravel-` reiškia, kad net jei kuri nors taisyklė nesuveiks,
+įrašai nepasimes — administratorius gali turėti bendrą taisyklę visiems
+`laravel-*` identifikatoriams.
+
+## 3. Įjunkite pereinamąjį režimą
+
+```bash
+sed -i 's|AUDIT_LOG_DRIVER=file|AUDIT_LOG_DRIVER=both|' .env
+php artisan config:clear
+```
+
+`both` rašo ir į failus, ir į syslog. Taip nepradingsite įrašų, jei
+rsyslog konfigūracija dar nesuveiks.
+
+## 4. Patikrinkite
+
+Atlikite kelis veiksmus sistemoje, tada palyginkite:
+
+```bash
+# Vietinis failas
+tail -3 /home/logs/{APP_NAME}/audit/audit-$(date +%Y-%m-%d).log
+
+# Sistemos zurnalas
+sudo grep "laravel-{APP_NAME}-audit" /var/log/syslog | tail -3
+```
+
+Jei matote tuos pačius įrašus abiejose vietose — veikia.
+
+## 5. Perjunkite į syslog
+
+```bash
+sed -i 's|AUDIT_LOG_DRIVER=both|AUDIT_LOG_DRIVER=syslog|' .env
+php artisan config:clear
+```
+
+## Ką svarbu žinoti
+
+**Dydžio riba.** Syslog ilgesnius pranešimus tyliai nukerpa, o nukirptas
+JSON tampa nebeskaitomas. Todėl paketas per didelius įrašus apkarpo pats,
+pakopomis: pirma `old_values`/`new_values`, tada `context`, tada žinutė.
+Apkarpytas įrašas pažymimas `_truncated` lauku.
+
+Numatytoji riba 7000 baitų atitinka įprastą rsyslog `MaxMessageSize` (8k)
+su atsarga antraštėms. Jei administratorius ją padidino:
+
+```
+AUDIT_LOG_SYSLOG_MAX_BYTES=30000
+```
+
+**Retencija.** Perjungus į `syslog`, `AUDIT_LOG_RETENTION_DAYS` nebeturi
+reikšmės — failų nebėra. Saugojimo terminą nustato administratorius per
+`logrotate`. Tai verta su juo aptarti.
+
+**Vientisumas.** Syslog turi privalumą: įrašai iškart perduodami kitam
+procesui, tad aplikacija negali ištrinti to, kas jau išsiųsta. Jei įrašai
+persiunčiami į kitą serverį — dar geriau.
+
+**Laravel `LOG_CHANNEL`.** Tai atskiras dalykas, valdantis Laravel savo
+`Log::` fasadą. Audito žurnalams jis įtakos neturi ir atvirkščiai.
+
+---
+
+# IX DALIS — RETENCIJA
 
 `AUDIT_LOG_RETENTION_DAYS=90` — po 90 dienų seni failai **automatiškai
 ištrinami**.

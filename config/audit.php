@@ -691,14 +691,76 @@ return [
 
     /*
     |--------------------------------------------------------------------
-    | Aktyvus tvarkyklė (driver)
+    | Kur rašomi žurnalai (driver)
     |--------------------------------------------------------------------
     |
-    | Šiuo metu palaikoma: "file". Ateityje planuojama: "database".
-    | Pasirinkimas leidžia pakeisti saugojimo būdą nekeičiant
-    | aplikacijos kodo, kuris naudoja AuditLog fasadą.
+    | "file"   - failai serveryje (base_path/app_name/audit|error). NUMATYTOJI.
+    | "syslog" - perduodama OS žurnalo demonui (rsyslog), iš kur
+    |            administratorius gali surinkti į vieną vietą.
+    | "both"   - abu keliai vienu metu.
+    |
+    | PEREINANT Į SYSLOG rekomenduojama pirma "both": taip įsitikinsite,
+    | kad įrašai realiai pasiekia centrinį serverį, dar neprarasdami
+    | vietinių failų. Patvirtinę - perjunkite į "syslog".
+    |
+    | SVARBU: tai valdo TIK audito žurnalus. Laravel savo Log:: fasadą
+    | valdo atskirai per LOG_CHANNEL .env kintamąjį - vienas kito
+    | neįtakoja.
     |
     */
     'driver' => env('AUDIT_LOG_DRIVER', 'file'),
+
+    /*
+    |--------------------------------------------------------------------
+    | Syslog nustatymai
+    |--------------------------------------------------------------------
+    |
+    | Naudojama tik kai driver = "syslog" arba "both".
+    |
+    | IDENTIFIKATORIUS - pagal jį sistemos administratorius nukreipia
+    | įrašus į atskirus failus. Sudaromas iš prefikso ir app_name:
+    |
+    |     laravel-epasirasymas-audit
+    |     laravel-epasirasymas-error
+    |
+    | Prefiksas "laravel-" svarbus: jei kas nors nesuveiks, įrašai
+    | nepasimes tarp sisteminių žurnalų, o administratoriui bus lengva
+    | atskirti, kad tai Laravel aplikacijų įrašai.
+    |
+    | Tikslius identifikatorius parodys komanda:
+    |
+    |     php artisan audit:syslog-info
+    |
+    | Ją reikia paleisti KIEKVIENAME projekte ir rezultatus perduoti
+    | administratoriui PRIEŠ įjungiant syslog.
+    |
+    */
+    'syslog' => [
+        // Visada turi prasidėti "laravel-", kad administratorius galėtų
+        // atskirti aplikacijų įrašus nuo sisteminių.
+        'ident_prefix' => env('AUDIT_LOG_SYSLOG_PREFIX', 'laravel-'),
+
+        // true  -> laravel-{app}-audit ir laravel-{app}-error (du failai)
+        // false -> laravel-{app} (viskas viename)
+        'separate_channels' => env('AUDIT_LOG_SYSLOG_SEPARATE', true),
+
+        // Kategorija, pagal kurią rsyslog gali filtruoti. Galima ir
+        // LOG_LOCAL0 - LOG_LOCAL7, dažnai naudojamos aplikacijų žurnalams.
+        'facility' => env('AUDIT_LOG_SYSLOG_FACILITY', 'LOG_USER'),
+
+        /*
+        | Maksimalus vieno įrašo dydis baitais.
+        |
+        | Syslog ilgesnius pranešimus TYLIAI NUKERPA, o nukirptas JSON
+        | tampa nebeskaitomas - prarandamas visas įrašas, ne tik jo galas.
+        | Todėl per didelius įrašus apkarpome patys, pakopomis: pirma
+        | old_values/new_values, tada context, tada žinutė. Apkarpytas
+        | įrašas pažymimas "_truncated" lauku.
+        |
+        | 7000 atitinka įprastą rsyslog MaxMessageSize (8k) su atsarga
+        | antraštėms. Jei administratorius padidino ribą, galima kelti.
+        */
+        'max_bytes' => env('AUDIT_LOG_SYSLOG_MAX_BYTES', 7000),
+    ],
 
 ];
